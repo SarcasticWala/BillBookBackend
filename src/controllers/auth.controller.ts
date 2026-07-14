@@ -6,10 +6,10 @@ import { ApiError } from "../utils/ApiError";
 import * as otpService from "../services/otp.service";
 
 export async function sendOtp(req: Request, res: Response): Promise<void> {
-  const result = await otpService.requestOtp(req.body?.phone);
-  // devCode is present only in non-production, so the flow is testable
-  // without an SMS provider.
-  res.json({ message: "OTP sent", ...result });
+  const result = await otpService.requestOtp(req.body?.email);
+  // devCode is present only in non-production when SMTP isn't configured, so
+  // the flow stays testable without an email provider.
+  res.json({ message: "Verification code sent", ...result });
 }
 
 export async function register(req: Request, res: Response): Promise<void> {

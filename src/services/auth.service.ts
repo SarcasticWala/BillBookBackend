@@ -3,7 +3,7 @@ import { User } from "../models/User";
 import { signToken } from "../utils/jwt";
 import { ApiError } from "../utils/ApiError";
 import { isAdminPhone } from "../middleware/auth";
-import { verifyOtp, normalizePhone } from "./otp.service";
+import { verifyOtp } from "./otp.service";
 
 const BCRYPT_ROUNDS = 10;
 
@@ -13,7 +13,8 @@ function sanitize(user: any) {
   return { ...rest, id: String(user._id) };
 }
 
-const last10 = (s: string) => String(s).replace(/\D/g, "").slice(-10);
+// Store the phone in E.164 so admin checks (ADMIN_PHONES) keep matching.
+const toE164 = (phone: string) => `+91${String(phone).replace(/\D/g, "").slice(-10)}`;
 
 export async function register(body: {
   name: string;
@@ -28,9 +29,8 @@ export async function register(body: {
     throw new ApiError(409, "An account with this email already exists");
   }
 
-  // Verify the phone via our backend OTP before creating the account.
-  await verifyOtp(body.phone, body.otp);
-  const phone = normalizePhone(body.phone);
+  // Verify ownership of the email via our backend OTP before creating the account.
+  await verifyOtp(email, body.otp);
 
   const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
 
@@ -40,8 +40,8 @@ export async function register(body: {
       name: body.name.trim(),
       email,
       password: passwordHash,
-      phone, // store E.164, consistent with JWT + admin checks
-      phoneVerified: true,
+      phone: toE164(body.phone), // collected, not OTP-verified
+      emailVerified: true,
     });
   } catch (err: any) {
     if (err?.code === 11000) throw new ApiError(409, "This email or phone is already registered");
@@ -68,19 +68,15 @@ export async function login(body: { email: string; password: string }) {
 
 export async function resetPassword(body: {
   email: string;
-  phone: string;
   otp: string;
   newPassword: string;
 }) {
   const email = body.email.toLowerCase().trim();
 
+  // Verify ownership of the email via OTP, then require the account to exist.
+  await verifyOtp(email, body.otp);
   const user = await User.findOne({ email });
-  // Verify the OTP for the submitted phone, then require it to match this
-  // account's phone — so a valid OTP for a different number can't reset it.
-  await verifyOtp(body.phone, body.otp);
-  if (!user || last10(user.phone) !== last10(body.phone)) {
-    throw new ApiError(400, "Phone number does not match this account");
-  }
+  if (!user) throw new ApiError(400, "No account found for this email");
 
   user.password = await bcrypt.hash(body.newPassword, BCRYPT_ROUNDS);
   await user.save();

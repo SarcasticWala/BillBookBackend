@@ -6,9 +6,10 @@ const userSchema = new Schema(
     email: { type: String, required: true, lowercase: true, trim: true, index: true },
     password: { type: String, required: true, select: false },
 
-    // Phone is verified via a backend OTP during signup before the account is created.
+    // Phone is collected at signup (not OTP-verified). Email is verified via a
+    // backend OTP before the account is created.
     phone: { type: String, required: true, index: true },
-    phoneVerified: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
 
     name: { type: String, default: "" },
     businessName: { type: String, default: "" },

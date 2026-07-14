@@ -10,27 +10,34 @@ export const loginSchema = z.object({
 });
 
 const phoneField = z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number");
-const otpField = z.string().regex(/^\d{6}$/, "Enter the 6-digit OTP");
+const otpField = z.string().regex(/^\d{6}$/, "Enter the 6-digit code");
+// Password must be 8+ chars with lowercase, uppercase and a number.
+const passwordField = z
+  .string()
+  .regex(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/,
+    "Password must be 8+ characters with upper, lower and a number"
+  );
 
-// Request an OTP for a phone number (signup / password reset).
-export const sendOtpSchema = z.object({ phone: phoneField });
+// Request an email verification code (signup / password reset).
+export const sendOtpSchema = z.object({ email: z.string().email("Enter a valid email") });
 
-// Signup: account is created only after the phone OTP is verified server-side.
+// Signup: account is created only after the email OTP is verified server-side.
+// Phone is collected and stored, but not OTP-verified.
 export const registerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Enter a valid email"),
-  password: z.string().min(8, "Use at least 8 characters"),
+  password: passwordField,
   phone: phoneField,
   otp: otpField,
 });
 
-// Forgot password: prove ownership by verifying the account's phone via OTP,
+// Forgot password: prove ownership by verifying the account's email via OTP,
 // then set a new password.
 export const resetPasswordSchema = z.object({
   email: z.string().email("Enter a valid email"),
-  phone: phoneField,
   otp: otpField,
-  newPassword: z.string().min(8, "Use at least 8 characters"),
+  newPassword: passwordField,
 });
 
 export const categorySchema = z

@@ -1,10 +1,10 @@
 import { Schema, model, InferSchemaType } from "mongoose";
 
-// One active OTP per phone number. The code itself is stored hashed (never in
+// One active OTP per email. The code itself is stored hashed (never in
 // plaintext), with a short expiry and an attempt counter to blunt brute force.
 const otpSchema = new Schema(
   {
-    phone: { type: String, required: true, unique: true, index: true },
+    email: { type: String, required: true, unique: true, lowercase: true, index: true },
     codeHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },
     attempts: { type: Number, default: 0 },

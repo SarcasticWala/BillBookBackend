@@ -47,6 +47,16 @@ export const env = {
     apiKey: required("CLOUDINARY_API_KEY"),
     apiSecret: required("CLOUDINARY_API_SECRET"),
   },
+
+  // SMTP for sending OTP emails (free via e.g. Gmail app password). All optional —
+  // when unset, no email is sent and (in dev) the code is returned instead.
+  smtp: {
+    host: optional("SMTP_HOST", ""),
+    port: parseInt(optional("SMTP_PORT", "587"), 10),
+    user: optional("SMTP_USER", ""),
+    pass: optional("SMTP_PASS", ""),
+    from: optional("SMTP_FROM", ""),
+  },
 };
 
 export const isProd = env.nodeEnv === "production";

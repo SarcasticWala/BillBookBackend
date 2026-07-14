@@ -10,6 +10,7 @@ import {
 import { requireAuth } from "../middleware/auth";
 import { upload } from "../middleware/upload";
 import { validate } from "../middleware/validate";
+import { otpLimiter } from "../middleware/rateLimit";
 import {
   loginSchema,
   registerSchema,
@@ -20,7 +21,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
 
-router.post("/send-otp", validate(sendOtpSchema), asyncHandler(sendOtp));
+router.post("/send-otp", otpLimiter, validate(sendOtpSchema), asyncHandler(sendOtp));
 router.post("/register", validate(registerSchema), asyncHandler(register));
 router.post("/login", validate(loginSchema), asyncHandler(login));
 router.post(
