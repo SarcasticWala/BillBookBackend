@@ -33,11 +33,13 @@ export const env = {
   jwtSecret: required("JWT_SECRET"),
   jwtExpiresIn: optional("JWT_EXPIRES_IN", "7d"),
 
+  // Firebase is no longer used for auth (email/password + backend OTP). These
+  // are optional so the backend boots without Firebase credentials.
   firebase: {
-    projectId: required("FIREBASE_PROJECT_ID"),
-    clientEmail: required("FIREBASE_CLIENT_EMAIL"),
+    projectId: optional("FIREBASE_PROJECT_ID", ""),
+    clientEmail: optional("FIREBASE_CLIENT_EMAIL", ""),
     // Env-stored keys escape newlines; restore them for the SDK.
-    privateKey: required("FIREBASE_PRIVATE_KEY").replace(/\\n/g, "\n"),
+    privateKey: optional("FIREBASE_PRIVATE_KEY", "").replace(/\\n/g, "\n"),
   },
 
   cloudinary: {

@@ -4,8 +4,6 @@ import { createApp } from "./app";
 import { connectDB } from "./config/db";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
-// Initialize Firebase Admin at boot so a bad key fails fast.
-import "./config/firebase";
 
 let server: Server;
 
