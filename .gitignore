@@ -1,0 +1,16 @@
+node_modules
+dist
+
+# Secrets — never commit
+.env
+.env.local
+serviceAccountKey.json
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
