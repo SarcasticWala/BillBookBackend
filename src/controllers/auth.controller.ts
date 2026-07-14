@@ -3,10 +3,27 @@ import * as authService from "../services/auth.service";
 import { ok } from "../utils/respond";
 import { ApiError } from "../utils/ApiError";
 
+import * as otpService from "../services/otp.service";
+
+export async function sendOtp(req: Request, res: Response): Promise<void> {
+  const result = await otpService.requestOtp(req.body?.phone);
+  // devCode is present only in non-production, so the flow is testable
+  // without an SMS provider.
+  res.json({ message: "OTP sent", ...result });
+}
+
+export async function register(req: Request, res: Response): Promise<void> {
+  const result = await authService.register(req.body);
+  res.status(201).json({ token: result.token, data: result.user });
+}
+
 export async function login(req: Request, res: Response): Promise<void> {
-  const { idToken } = req.body ?? {};
-  if (!idToken) throw new ApiError(400, "idToken is required");
-  const result = await authService.loginWithFirebaseIdToken(idToken);
+  const result = await authService.login(req.body);
+  res.json({ token: result.token, data: result.user });
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  const result = await authService.resetPassword(req.body);
   res.json({ token: result.token, data: result.user });
 }
 

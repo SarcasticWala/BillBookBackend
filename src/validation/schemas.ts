@@ -3,8 +3,34 @@ import { z } from "zod";
 // Payloads are rich and computed client-side, so schemas validate the
 // load-bearing fields and pass the rest through unchanged.
 
+// Email + password login (credentials owned by our backend/MongoDB).
 export const loginSchema = z.object({
-  idToken: z.string().min(1, "idToken is required"),
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(1, "Password is required"),
+});
+
+const phoneField = z.string().regex(/^\d{10}$/, "Enter a valid 10-digit mobile number");
+const otpField = z.string().regex(/^\d{6}$/, "Enter the 6-digit OTP");
+
+// Request an OTP for a phone number (signup / password reset).
+export const sendOtpSchema = z.object({ phone: phoneField });
+
+// Signup: account is created only after the phone OTP is verified server-side.
+export const registerSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(8, "Use at least 8 characters"),
+  phone: phoneField,
+  otp: otpField,
+});
+
+// Forgot password: prove ownership by verifying the account's phone via OTP,
+// then set a new password.
+export const resetPasswordSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  phone: phoneField,
+  otp: otpField,
+  newPassword: z.string().min(8, "Use at least 8 characters"),
 });
 
 export const categorySchema = z

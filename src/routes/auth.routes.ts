@@ -1,14 +1,33 @@
 import { Router } from "express";
-import { login, me, updateProfile } from "../controllers/auth.controller";
+import {
+  sendOtp,
+  register,
+  login,
+  resetPassword,
+  me,
+  updateProfile,
+} from "../controllers/auth.controller";
 import { requireAuth } from "../middleware/auth";
 import { upload } from "../middleware/upload";
 import { validate } from "../middleware/validate";
-import { loginSchema } from "../validation/schemas";
+import {
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+  sendOtpSchema,
+} from "../validation/schemas";
 import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
 
+router.post("/send-otp", validate(sendOtpSchema), asyncHandler(sendOtp));
+router.post("/register", validate(registerSchema), asyncHandler(register));
 router.post("/login", validate(loginSchema), asyncHandler(login));
+router.post(
+  "/reset-password",
+  validate(resetPasswordSchema),
+  asyncHandler(resetPassword)
+);
 router.get("/me", requireAuth, asyncHandler(me));
 router.put("/profile", requireAuth, upload.single("logo"), asyncHandler(updateProfile));
 

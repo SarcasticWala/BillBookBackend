@@ -2,10 +2,15 @@ import { Schema, model, InferSchemaType } from "mongoose";
 
 const userSchema = new Schema(
   {
-    firebaseUid: { type: String, required: true, unique: true, index: true },
+    // Email + password are the primary credentials (backend/MongoDB auth).
+    email: { type: String, required: true, lowercase: true, trim: true, index: true },
+    password: { type: String, required: true, select: false },
+
+    // Phone is verified via a backend OTP during signup before the account is created.
     phone: { type: String, required: true, index: true },
+    phoneVerified: { type: Boolean, default: false },
+
     name: { type: String, default: "" },
-    email: { type: String, default: "" },
     businessName: { type: String, default: "" },
     gstin: { type: String, default: "" },
     state: { type: String, default: "" },
@@ -13,6 +18,13 @@ const userSchema = new Schema(
     logoUrl: { type: String, default: "" },
   },
   { timestamps: true }
+);
+
+// Unique on non-empty emails only, so legacy docs with a blank email don't break
+// the index build. New signups always provide a real email.
+userSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { email: { $gt: "" } } }
 );
 
 export type UserDoc = InferSchemaType<typeof userSchema>;
