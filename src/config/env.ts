@@ -48,13 +48,21 @@ export const env = {
     apiSecret: required("CLOUDINARY_API_SECRET"),
   },
 
-  // SMTP for sending OTP emails (free via e.g. Gmail app password). All optional —
-  // when unset, no email is sent and (in dev) the code is returned instead.
+  // Email OTP delivery via the Gmail API (HTTPS/OAuth2) — works on hosts like
+  // Render that block outbound SMTP. Falls back to SMTP for local dev. All
+  // optional — when none is configured, no email is sent and (in dev) the code
+  // is returned instead.
+  gmail: {
+    clientId: optional("GOOGLE_CLIENT_ID", ""),
+    clientSecret: optional("GOOGLE_CLIENT_SECRET", ""),
+    refreshToken: optional("GOOGLE_REFRESH_TOKEN", ""),
+  },
   smtp: {
     host: optional("SMTP_HOST", ""),
     port: parseInt(optional("SMTP_PORT", "587"), 10),
     user: optional("SMTP_USER", ""),
     pass: optional("SMTP_PASS", ""),
+    // Sender address (your Gmail). Used as the "From" for both Gmail API and SMTP.
     from: optional("SMTP_FROM", ""),
   },
 };
