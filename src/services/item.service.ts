@@ -1,10 +1,37 @@
 import { Types } from "mongoose";
 import { Item, ItemDoc } from "../models/Item";
-import { ItemCategory } from "../models/ItemCategory";
+// Categories are unified across Parties and Items — both use one shared store
+// (the party-category collection) so a category created in either place shows
+// in both. Parties reference categories by id, so this collection stays canonical.
+import { PartyCategory } from "../models/PartyCategory";
 import { ApiError } from "../utils/ApiError";
 import { uploadBuffer } from "../config/cloudinary";
 import { parseSheet, buildErrorWorkbook } from "../utils/excel";
 import { getPaging } from "../utils/pagination";
+import { logger } from "../config/logger";
+
+// Upload each image to Cloudinary; if that's unavailable/misconfigured, fall
+// back to an inline data URI (small images only) so item creation never fails
+// on image upload. Oversized images are skipped rather than blocking the save.
+const INLINE_IMAGE_MAX = 2 * 1024 * 1024; // 2 MB
+async function storeImages(files: Express.Multer.File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files ?? []) {
+    try {
+      urls.push(await uploadBuffer(file.buffer));
+    } catch (err) {
+      if (file.size <= INLINE_IMAGE_MAX) {
+        urls.push(`data:${file.mimetype};base64,${file.buffer.toString("base64")}`);
+      } else {
+        logger.warn(
+          { name: file.originalname, size: file.size },
+          "Image upload failed and file too large to inline — skipped"
+        );
+      }
+    }
+  }
+  return urls;
+}
 
 const bool = (v: unknown): boolean => v === true || v === "true";
 const num = (v: unknown): number => {
@@ -64,6 +91,19 @@ export function toItemResponse(doc: ItemDoc & { _id: Types.ObjectId }) {
   };
 }
 
+// The item-create form sends the category id; store the category NAME so it
+// displays and filters consistently (falls back to the raw value if it's
+// already a name or an unknown id).
+async function resolveCategoryName(userId: Types.ObjectId, val: any): Promise<string> {
+  const raw = String(val ?? "").trim();
+  if (!raw) return "";
+  if (Types.ObjectId.isValid(raw)) {
+    const cat = await PartyCategory.findOne({ _id: raw, user: userId }).lean();
+    if (cat) return cat.name;
+  }
+  return raw;
+}
+
 export async function createItem(
   userId: Types.ObjectId,
   body: Record<string, any>,
@@ -71,10 +111,7 @@ export async function createItem(
 ) {
   if (!body.itemName) throw new ApiError(400, "Item name is required");
 
-  const images: string[] = [];
-  for (const file of files ?? []) {
-    images.push(await uploadBuffer(file.buffer));
-  }
+  const images: string[] = await storeImages(files);
 
   const itemType = String(body.itemType || "PRODUCT").toUpperCase();
   const opening = num(body.openingStock);
@@ -86,7 +123,7 @@ export async function createItem(
     isOnlineVisible: bool(body.isOnlineVisible),
     itemProductType: body.itemProductType || "NEW",
     isPreowned: String(body.itemProductType || "NEW").toUpperCase() !== "NEW",
-    categoryName: body.itemCatagory || "",
+    categoryName: await resolveCategoryName(userId, body.itemCatagory),
     salePrice: num(body.salePrice),
     purchasePrice: num(body.purchasePrice),
     gstRate: num(body.gstRate),
@@ -148,12 +185,23 @@ export async function updateStock(
 }
 
 export async function createCategory(userId: Types.ObjectId, name: string) {
-  const cat = await ItemCategory.create({ user: userId, name });
-  return { id: String(cat._id), _id: String(cat._id), name: cat.name, value: String(cat._id), label: cat.name };
+  const trimmed = String(name).trim();
+  // Shared collection with a unique (user, name) index — reuse if it already
+  // exists (created from either Parties or Items) instead of erroring.
+  let cat = await PartyCategory.findOne({ user: userId, name: trimmed });
+  if (!cat) {
+    try {
+      cat = await PartyCategory.create({ user: userId, name: trimmed });
+    } catch (err: any) {
+      if (err?.code === 11000) cat = await PartyCategory.findOne({ user: userId, name: trimmed });
+      else throw err;
+    }
+  }
+  return { id: String(cat!._id), _id: String(cat!._id), name: cat!.name, value: String(cat!._id), label: cat!.name };
 }
 
 export async function listCategories(userId: Types.ObjectId) {
-  const cats = await ItemCategory.find({ user: userId }).sort({ name: 1 }).lean();
+  const cats = await PartyCategory.find({ user: userId }).sort({ name: 1 }).lean();
   return cats.map((c) => ({
     id: String(c._id),
     _id: String(c._id),

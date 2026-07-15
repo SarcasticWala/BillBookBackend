@@ -57,13 +57,24 @@ export async function getParty(userId: Types.ObjectId, id: string) {
 }
 
 export async function createCategory(userId: Types.ObjectId, name: string) {
-  const cat = await PartyCategory.create({ user: userId, name });
+  const trimmed = String(name).trim();
+  // Shared category store (used by both Parties and Items). Reuse if the name
+  // already exists rather than failing on the unique (user, name) index.
+  let cat = await PartyCategory.findOne({ user: userId, name: trimmed });
+  if (!cat) {
+    try {
+      cat = await PartyCategory.create({ user: userId, name: trimmed });
+    } catch (err: any) {
+      if (err?.code === 11000) cat = await PartyCategory.findOne({ user: userId, name: trimmed });
+      else throw err;
+    }
+  }
   return {
-    id: String(cat._id),
-    _id: String(cat._id),
-    name: cat.name,
-    value: String(cat._id),
-    label: cat.name,
+    id: String(cat!._id),
+    _id: String(cat!._id),
+    name: cat!.name,
+    value: String(cat!._id),
+    label: cat!.name,
   };
 }
 
