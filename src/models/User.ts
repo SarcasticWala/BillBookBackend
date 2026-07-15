@@ -3,7 +3,7 @@ import { Schema, model, InferSchemaType } from "mongoose";
 const userSchema = new Schema(
   {
     // Email + password are the primary credentials (backend/MongoDB auth).
-    email: { type: String, required: true, lowercase: true, trim: true, index: true },
+    email: { type: String, required: true, lowercase: true, trim: true },
     password: { type: String, required: true, select: false },
 
     // Phone is collected at signup (not OTP-verified). Email is verified via a

@@ -7,9 +7,38 @@ let transporter: Transporter | null = null;
 const smtpConfigured = () => !!(env.smtp.host && env.smtp.user && env.smtp.pass);
 const gmailConfigured = () =>
   !!(env.gmail.clientId && env.gmail.clientSecret && env.gmail.refreshToken && env.smtp.from);
+const brevoConfigured = () => !!(env.brevoApiKey && env.smtp.from);
 
-/** Email is deliverable if the Gmail API or SMTP is configured. */
-export const emailConfigured = (): boolean => gmailConfigured() || smtpConfigured();
+/** Email is deliverable if Brevo, the Gmail API, or SMTP is configured. */
+export const emailConfigured = (): boolean =>
+  brevoConfigured() || gmailConfigured() || smtpConfigured();
+
+/**
+ * Send via Brevo's HTTPS API (port 443) — works on Render, needs only an API
+ * key (no OAuth). Sender (SMTP_FROM) must be a verified Brevo sender. Throws on
+ * non-2xx.
+ */
+async function sendViaBrevo(to: string, code: string): Promise<void> {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": env.brevoApiKey,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { email: env.smtp.from, name: "BillBook" },
+      to: [{ email: to }],
+      subject: SUBJECT,
+      textContent: textBody(code),
+      htmlContent: htmlBody(code),
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Brevo send failed (${res.status})${detail ? ": " + detail : ""}`);
+  }
+}
 
 const SUBJECT = "Your BillBook verification code";
 const textBody = (code: string) =>
@@ -103,6 +132,11 @@ function getTransporter(): Transporter {
  * nothing is configured. The code itself is never logged.
  */
 export async function sendOtpEmail(to: string, code: string): Promise<boolean> {
+  if (brevoConfigured()) {
+    await sendViaBrevo(to, code);
+    logger.info({ to, via: "brevo" }, "OTP email sent");
+    return true;
+  }
   if (gmailConfigured()) {
     await sendViaGmailApi(to, code);
     logger.info({ to, via: "gmail-api" }, "OTP email sent");

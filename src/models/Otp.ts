@@ -4,7 +4,7 @@ import { Schema, model, InferSchemaType } from "mongoose";
 // plaintext), with a short expiry and an attempt counter to blunt brute force.
 const otpSchema = new Schema(
   {
-    email: { type: String, required: true, unique: true, lowercase: true, index: true },
+    email: { type: String, required: true, unique: true, lowercase: true },
     codeHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },
     attempts: { type: Number, default: 0 },

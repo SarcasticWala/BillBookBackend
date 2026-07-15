@@ -48,10 +48,11 @@ export const env = {
     apiSecret: required("CLOUDINARY_API_SECRET"),
   },
 
-  // Email OTP delivery via the Gmail API (HTTPS/OAuth2) — works on hosts like
-  // Render that block outbound SMTP. Falls back to SMTP for local dev. All
-  // optional — when none is configured, no email is sent and (in dev) the code
-  // is returned instead.
+  // Email OTP delivery. Provider preference: Brevo HTTP API -> Gmail API ->
+  // SMTP (local fallback). All HTTP options work on hosts like Render that
+  // block outbound SMTP. When none is configured, no email is sent and (in dev)
+  // the code is returned instead.
+  brevoApiKey: optional("BREVO_API_KEY", ""),
   gmail: {
     clientId: optional("GOOGLE_CLIENT_ID", ""),
     clientSecret: optional("GOOGLE_CLIENT_SECRET", ""),

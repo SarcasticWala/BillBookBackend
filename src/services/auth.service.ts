@@ -25,12 +25,13 @@ export async function register(body: {
 }) {
   const email = body.email.toLowerCase().trim();
 
+  // Verify email ownership via OTP FIRST — so a caller without a valid code
+  // can't probe which emails are already registered (account enumeration).
+  await verifyOtp(email, body.otp);
+
   if (await User.findOne({ email }).lean()) {
     throw new ApiError(409, "An account with this email already exists");
   }
-
-  // Verify ownership of the email via our backend OTP before creating the account.
-  await verifyOtp(email, body.otp);
 
   const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
 
