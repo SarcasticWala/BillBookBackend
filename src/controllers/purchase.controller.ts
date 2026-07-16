@@ -17,6 +17,10 @@ export async function getPurchaseInvoices(req: Request, res: Response): Promise<
   ok(res, await purchaseService.listPurchaseInvoices(uid(req), req.query));
 }
 
+export async function getPurchaseInvoicesPaged(req: Request, res: Response): Promise<void> {
+  ok(res, await purchaseService.listPurchaseInvoicesPaged(uid(req), req.query));
+}
+
 export async function getPurchaseInvoice(req: Request, res: Response): Promise<void> {
   ok(res, await purchaseService.getPurchaseInvoice(uid(req), req.params.id));
 }

@@ -13,6 +13,10 @@ export async function getSaleInvoices(req: Request, res: Response): Promise<void
   ok(res, await saleService.listSaleInvoices(uid(req), req.query));
 }
 
+export async function getSaleInvoicesPaged(req: Request, res: Response): Promise<void> {
+  ok(res, await saleService.listSaleInvoicesPaged(uid(req), req.query));
+}
+
 export async function getSaleInvoice(req: Request, res: Response): Promise<void> {
   ok(res, await saleService.getSaleInvoice(uid(req), req.params.id));
 }

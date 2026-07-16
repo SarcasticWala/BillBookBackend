@@ -25,6 +25,10 @@ export async function getItems(req: Request, res: Response): Promise<void> {
   ok(res, await itemService.listItems(uid(req), req.query));
 }
 
+export async function getItemsPaged(req: Request, res: Response): Promise<void> {
+  ok(res, await itemService.listItemsPaged(uid(req), req.query));
+}
+
 export async function getItemById(req: Request, res: Response): Promise<void> {
   const id = req.query.id;
   if (!id) throw new ApiError(400, "id query param is required");

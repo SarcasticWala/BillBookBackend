@@ -218,6 +218,70 @@ export async function listItems(userId: Types.ObjectId, query: Record<string, an
   return docs.map((d) => toItemResponse(d));
 }
 
+export async function listItemsPaged(
+  userId: Types.ObjectId,
+  query: Record<string, any>
+) {
+  const { page, limit, skip } = getPaging(query);
+  const filter: Record<string, any> = { user: userId };
+
+  const search = String(query.search || "").trim();
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { itemCode: { $regex: search, $options: "i" } },
+      { serviceCode: { $regex: search, $options: "i" } },
+    ];
+  }
+  const cats = String(query.categories || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (cats.length) filter.categoryName = { $in: cats };
+  if (String(query.lowStock) === "true") {
+    filter.isAlertEnabled = true;
+    filter.$expr = { $lte: ["$stock", "$productAlertValue"] };
+  }
+
+  const [docs, total] = await Promise.all([
+    Item.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean<Array<ItemDoc & { _id: Types.ObjectId }>>()
+      .exec(),
+    Item.countDocuments(filter),
+  ]);
+
+  // Stats reflect ALL of the user's items (independent of the current filter),
+  // matching the Inventory summary cards.
+  const [valueAgg, lowStockCount] = await Promise.all([
+    Item.aggregate([
+      { $match: { user: userId, itemType: "PRODUCT" } },
+      {
+        $group: {
+          _id: null,
+          stockValue: { $sum: { $multiply: ["$stock", "$salePrice"] } },
+        },
+      },
+    ]),
+    Item.countDocuments({
+      user: userId,
+      isAlertEnabled: true,
+      $expr: { $lte: ["$stock", "$productAlertValue"] },
+    }),
+  ]);
+
+  return {
+    items: docs.map((d) => toItemResponse(d)),
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    stats: { stockValue: valueAgg[0]?.stockValue || 0, lowStockCount },
+  };
+}
+
 export async function getItem(userId: Types.ObjectId, id: string) {
   const doc = await Item.findOne({ _id: id, user: userId }).lean<
     ItemDoc & { _id: Types.ObjectId }

@@ -50,6 +50,59 @@ export async function listParties(userId: Types.ObjectId, query: Record<string, 
   return withIds(parties);
 }
 
+export async function listPartiesPaged(
+  userId: Types.ObjectId,
+  query: Record<string, any>
+) {
+  const { page, limit, skip } = getPaging(query);
+  const filter: Record<string, any> = { user: userId };
+  const search = String(query.search || "").trim();
+  if (search) {
+    filter.$or = [
+      { partyName: { $regex: search, $options: "i" } },
+      { mobileNo: { $regex: search, $options: "i" } },
+    ];
+  }
+  if (query.partyType) filter.partyType = query.partyType;
+  const cats = String(query.categories || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (cats.length) filter.partyCatagory = { $in: cats };
+
+  const [parties, total, statsAgg] = await Promise.all([
+    Party.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Party.countDocuments(filter),
+    // Stats reflect ALL of the user's parties (independent of the filter),
+    // matching the Parties summary cards.
+    Party.aggregate([
+      { $match: { user: userId } },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 },
+          toCollect: {
+            $sum: { $cond: [{ $gt: ["$balance", 0] }, "$balance", 0] },
+          },
+          toPay: {
+            $sum: { $cond: [{ $lt: ["$balance", 0] }, { $abs: "$balance" }, 0] },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const s = statsAgg[0] || {};
+  return {
+    items: withIds(parties),
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    stats: { count: s.count || 0, toCollect: s.toCollect || 0, toPay: s.toPay || 0 },
+  };
+}
+
 export async function getParty(userId: Types.ObjectId, id: string) {
   const party = await Party.findOne({ _id: id, user: userId }).lean();
   if (!party) throw new ApiError(404, "Party not found");

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createSale,
   getSaleInvoices,
+  getSaleInvoicesPaged,
   getSaleInvoice,
   updateSale,
   deleteSale,
@@ -16,6 +17,7 @@ router.use(requireAuth);
 
 router.post("/create-sale", validate(saleCreateSchema), asyncHandler(createSale));
 router.get("/sale-invoices", asyncHandler(getSaleInvoices));
+router.get("/sale-invoices-paged", asyncHandler(getSaleInvoicesPaged));
 router.get("/:id", asyncHandler(getSaleInvoice));
 router.put("/:id", validate(saleCreateSchema), asyncHandler(updateSale));
 router.delete("/:id", asyncHandler(deleteSale));

@@ -55,6 +55,52 @@ export async function listPurchaseInvoices(
   return withIds(invoices);
 }
 
+export async function listPurchaseInvoicesPaged(
+  userId: Types.ObjectId,
+  query: Record<string, any>
+) {
+  const { page, limit, skip } = getPaging(query);
+  const filter: Record<string, any> = { user: userId };
+  const search = String(query.search || "").trim();
+  if (search) {
+    filter.$or = [
+      { invioceNo: { $regex: search, $options: "i" } },
+      { partyName: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  const [docs, total, summaryAgg] = await Promise.all([
+    PurchaseInvoice.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("partyId", "partyName mobileNo gstNumber")
+      .lean(),
+    PurchaseInvoice.countDocuments(filter),
+    PurchaseInvoice.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$totalPurchaseAmount" },
+          paid: { $sum: "$paidAmount" },
+          due: { $sum: "$dueAmount" },
+        },
+      },
+    ]),
+  ]);
+
+  const s = summaryAgg[0] || {};
+  return {
+    items: withIds(docs),
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    summary: { total: s.total || 0, paid: s.paid || 0, due: s.due || 0 },
+  };
+}
+
 export async function getPurchaseInvoice(userId: Types.ObjectId, id: string) {
   const invoice = await PurchaseInvoice.findOne({ _id: id, user: userId })
     .populate(

@@ -16,6 +16,10 @@ export async function getParties(req: Request, res: Response): Promise<void> {
   ok(res, await partyService.listParties(uid(req), req.query));
 }
 
+export async function getPartiesPaged(req: Request, res: Response): Promise<void> {
+  ok(res, await partyService.listPartiesPaged(uid(req), req.query));
+}
+
 export async function getPartyById(req: Request, res: Response): Promise<void> {
   ok(res, await partyService.getParty(uid(req), req.params.id));
 }

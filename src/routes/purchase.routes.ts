@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createPurchase,
   getPurchaseInvoices,
+  getPurchaseInvoicesPaged,
   getPurchaseInvoice,
   updatePurchase,
   deletePurchase,
@@ -20,6 +21,7 @@ router.post(
   asyncHandler(createPurchase)
 );
 router.get("/purchase-invoices", asyncHandler(getPurchaseInvoices));
+router.get("/purchase-invoices-paged", asyncHandler(getPurchaseInvoicesPaged));
 router.get("/:id", asyncHandler(getPurchaseInvoice));
 router.put(
   "/:id",

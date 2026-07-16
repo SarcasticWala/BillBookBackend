@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createParty,
   getParties,
+  getPartiesPaged,
   getPartyById,
   updateParty,
   createCategory,
@@ -24,6 +25,7 @@ router.use(requireAuth);
 
 router.post("/create", validate(partyCreateSchema), asyncHandler(createParty));
 router.get("/parties", asyncHandler(getParties));
+router.get("/parties-paged", asyncHandler(getPartiesPaged));
 router.get("/get-party/:id", asyncHandler(getPartyById));
 router.put("/update-party/:id", validate(partyUpdateSchema), asyncHandler(updateParty));
 

@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createItem,
   getItems,
+  getItemsPaged,
   getItemById,
   createItemCategory,
   getItemCategories,
@@ -25,6 +26,7 @@ router.post("/create", upload.array("itemImages", 5), asyncHandler(createItem));
 router.post("/bulk-create-items", upload.single("file"), asyncHandler(bulkCreateItems));
 
 router.get("/items", asyncHandler(getItems));
+router.get("/items-paged", asyncHandler(getItemsPaged));
 router.get("/get-item", asyncHandler(getItemById));
 
 router.post(
