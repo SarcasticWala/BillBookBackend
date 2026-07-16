@@ -2,6 +2,9 @@ import { Router } from "express";
 import {
   createPurchase,
   getPurchaseInvoices,
+  getPurchaseInvoice,
+  updatePurchase,
+  deletePurchase,
 } from "../controllers/purchase.controller";
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../middleware/validate";
@@ -17,5 +20,12 @@ router.post(
   asyncHandler(createPurchase)
 );
 router.get("/purchase-invoices", asyncHandler(getPurchaseInvoices));
+router.get("/:id", asyncHandler(getPurchaseInvoice));
+router.put(
+  "/:id",
+  validate(purchaseCreateSchema),
+  asyncHandler(updatePurchase)
+);
+router.delete("/:id", asyncHandler(deletePurchase));
 
 export default router;

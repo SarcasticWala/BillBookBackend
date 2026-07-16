@@ -150,6 +150,63 @@ export async function createItem(
   return toItemResponse(item as any);
 }
 
+export async function updateItem(
+  userId: Types.ObjectId,
+  id: string,
+  body: Record<string, any>,
+  files: Express.Multer.File[]
+) {
+  const item = await Item.findOne({ _id: id, user: userId });
+  if (!item) throw new ApiError(404, "Item not found");
+  if (!body.itemName) throw new ApiError(400, "Item name is required");
+
+  const itemType = String(body.itemType || item.itemType || "PRODUCT").toUpperCase();
+
+  // Keep the images already on the item; append any newly uploaded ones.
+  const newImages: string[] = await storeImages(files);
+  const images = [...(item.images || []), ...newImages];
+
+  item.set({
+    itemType,
+    name: body.itemName,
+    isOnlineVisible: bool(body.isOnlineVisible),
+    itemProductType: body.itemProductType || "NEW",
+    isPreowned: String(body.itemProductType || "NEW").toUpperCase() !== "NEW",
+    categoryName: await resolveCategoryName(userId, body.itemCatagory),
+    salePrice: num(body.salePrice),
+    purchasePrice: num(body.purchasePrice),
+    gstRate: num(body.gstRate),
+    isSaleTaxApplicable: bool(body.isSaleTaxApplicable),
+    isPurchaseTaxApplicable: bool(body.isPurchaseTaxApplicable),
+    unit: body.unit || "PCS",
+    itemCode: body.itemCode || "",
+    hsnCode: body.hsnCode || "",
+    sacCode: body.sacCode || "",
+    serviceCode: body.serviceCode || "",
+    productAlertValue: num(body.productAlertValue),
+    isAlertEnabled: bool(body.isAlertEnabled),
+    asOfDate: body.asOfDate ? new Date(body.asOfDate) : item.asOfDate,
+    hasSerialization: bool(body.hasSerialisationOn),
+    serialNos: gatherSerials(body),
+    batteryPercentage: body.batteryPercentage || "",
+    description: body.description || "",
+    images,
+    imageUrl: images[0] || "",
+  });
+
+  // If opening stock changed, shift on-hand stock by the same delta so the
+  // running quantity stays consistent with movements already recorded.
+  if (body.openingStock != null && body.openingStock !== "") {
+    const newOpening = num(body.openingStock);
+    const delta = newOpening - num(item.openingStock);
+    item.openingStock = newOpening;
+    item.stock = num(item.stock) + delta;
+  }
+
+  await item.save();
+  return toItemResponse(item as any);
+}
+
 export async function listItems(userId: Types.ObjectId, query: Record<string, any>) {
   const { limit, skip } = getPaging(query);
   const docs = await Item.find({ user: userId })

@@ -31,6 +31,15 @@ export async function getItemById(req: Request, res: Response): Promise<void> {
   ok(res, await itemService.getItem(uid(req), String(id)));
 }
 
+export async function updateItem(req: Request, res: Response): Promise<void> {
+  const files = (req.files as Express.Multer.File[]) ?? [];
+  ok(
+    res,
+    await itemService.updateItem(uid(req), req.params.id, req.body ?? {}, files),
+    "Item updated"
+  );
+}
+
 export async function updateItemStock(req: Request, res: Response): Promise<void> {
   ok(res, await itemService.updateStock(uid(req), req.body), "Stock updated");
 }

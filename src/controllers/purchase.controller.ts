@@ -16,3 +16,23 @@ export async function createPurchase(req: Request, res: Response): Promise<void>
 export async function getPurchaseInvoices(req: Request, res: Response): Promise<void> {
   ok(res, await purchaseService.listPurchaseInvoices(uid(req), req.query));
 }
+
+export async function getPurchaseInvoice(req: Request, res: Response): Promise<void> {
+  ok(res, await purchaseService.getPurchaseInvoice(uid(req), req.params.id));
+}
+
+export async function updatePurchase(req: Request, res: Response): Promise<void> {
+  ok(
+    res,
+    await purchaseService.updatePurchase(uid(req), req.params.id, req.body ?? {}),
+    "Purchase invoice updated"
+  );
+}
+
+export async function deletePurchase(req: Request, res: Response): Promise<void> {
+  ok(
+    res,
+    await purchaseService.deletePurchase(uid(req), req.params.id),
+    "Purchase invoice deleted"
+  );
+}

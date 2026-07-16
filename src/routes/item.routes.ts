@@ -7,6 +7,7 @@ import {
   getItemCategories,
   getTaxes,
   getUnits,
+  updateItem,
   updateItemStock,
   bulkCreateItems,
 } from "../controllers/item.controller";
@@ -37,5 +38,7 @@ router.get("/taxes", asyncHandler(getTaxes));
 router.get("/units", asyncHandler(getUnits));
 
 router.put("/update-item-stock", validate(updateStockSchema), asyncHandler(updateItemStock));
+// Item update accepts up to 5 new images under "itemImages" (existing kept).
+router.put("/update/:id", upload.array("itemImages", 5), asyncHandler(updateItem));
 
 export default router;
