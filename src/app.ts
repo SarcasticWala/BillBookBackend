@@ -14,6 +14,7 @@ import purchaseRoutes from "./routes/purchase.routes";
 import documentRoutes from "./routes/document.routes";
 import paymentRoutes from "./routes/payment.routes";
 import demoRoutes from "./routes/demo.routes";
+import accountRoutes from "./routes/account.routes";
 import { notFound, errorHandler } from "./middleware/error";
 
 export function createApp() {
@@ -53,6 +54,7 @@ export function createApp() {
   app.use("/api/document", documentRoutes);
   app.use("/api/payment", paymentRoutes);
   app.use("/api/demo", demoRoutes);
+  app.use("/api/account", accountRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
