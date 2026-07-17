@@ -8,6 +8,19 @@ export async function bookDemo(userId: Types.ObjectId, body: Record<string, any>
   if (!body.name) throw new ApiError(400, "Name is required");
   if (!body.mobileNo) throw new ApiError(400, "Mobile number is required");
 
+  // One active demo at a time: block a new request while an existing one is
+  // still PENDING or SCHEDULED (prevents duplicate / spam bookings).
+  const active = await DemoRequest.findOne({
+    user: userId,
+    status: { $in: ["PENDING", "SCHEDULED"] },
+  }).lean();
+  if (active) {
+    throw new ApiError(
+      409,
+      "You already have a demo request in progress. We'll reach out soon."
+    );
+  }
+
   const demo = await DemoRequest.create({
     user: userId,
     name: body.name,

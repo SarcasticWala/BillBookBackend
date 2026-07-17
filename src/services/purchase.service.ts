@@ -78,7 +78,8 @@ export async function listPurchaseInvoicesPaged(
       .lean(),
     PurchaseInvoice.countDocuments(filter),
     PurchaseInvoice.aggregate([
-      { $match: filter },
+      // Voided invoices are excluded from the money totals.
+      { $match: { ...filter, status: { $ne: "VOID" } } },
       {
         $group: {
           _id: null,
@@ -119,6 +120,8 @@ export async function updatePurchase(
 ) {
   const existing = await PurchaseInvoice.findOne({ _id: id, user: userId });
   if (!existing) throw new ApiError(404, "Purchase invoice not found");
+  if (existing.status === "VOID")
+    throw new ApiError(400, "A voided invoice cannot be edited");
 
   const rows: InvoiceItemRow[] = Array.isArray(body.itemDetails) ? body.itemDetails : [];
   if (!body.partyId) throw new ApiError(400, "partyId is required");
@@ -162,9 +165,13 @@ export async function updatePurchase(
   return withId(existing.toObject());
 }
 
-export async function deletePurchase(userId: Types.ObjectId, id: string) {
+// Voiding keeps the record (audit trail) but reverses its stock and
+// party-balance effects, so a voided invoice no longer counts anywhere.
+export async function voidPurchase(userId: Types.ObjectId, id: string) {
   const existing = await PurchaseInvoice.findOne({ _id: id, user: userId });
   if (!existing) throw new ApiError(404, "Purchase invoice not found");
+  if (existing.status === "VOID")
+    throw new ApiError(400, "Invoice is already voided");
 
   const oldRows = (existing.itemDetails as InvoiceItemRow[]) || [];
   await applyStockDelta(userId, oldRows, -1);
@@ -174,6 +181,7 @@ export async function deletePurchase(userId: Types.ObjectId, id: string) {
       { $inc: { balance: existing.dueAmount } }
     );
   }
-  await existing.deleteOne();
-  return { id };
+  existing.set({ status: "VOID", dueAmount: 0 });
+  await existing.save();
+  return withId(existing.toObject());
 }

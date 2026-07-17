@@ -9,6 +9,7 @@ import {
 } from "../controllers/purchase.controller";
 import { requireAuth } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { idempotency } from "../middleware/idempotency";
 import { purchaseCreateSchema } from "../validation/schemas";
 import { asyncHandler } from "../utils/asyncHandler";
 
@@ -18,6 +19,7 @@ router.use(requireAuth);
 router.post(
   "/create-purchase",
   validate(purchaseCreateSchema),
+  idempotency,
   asyncHandler(createPurchase)
 );
 router.get("/purchase-invoices", asyncHandler(getPurchaseInvoices));

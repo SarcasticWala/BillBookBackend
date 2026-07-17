@@ -45,9 +45,13 @@ export async function requestOtp(rawEmail: string): Promise<{ devCode?: string }
   return {};
 }
 
-/** Verify (and consume) the OTP for an email. Throws on any failure. */
-export async function verifyOtp(rawEmail: string, code: string): Promise<void> {
-  const email = normalizeEmail(rawEmail);
+/**
+ * Validate the OTP without consuming it. Throws on any failure (missing,
+ * expired, too many attempts, mismatch). Used to confirm the code at a
+ * dedicated verify step before the caller proceeds (e.g. reset-password
+ * splits OTP verification and the actual reset into two screens).
+ */
+async function assertValidOtp(email: string, code: string): Promise<void> {
   const record = await Otp.findOne({ email });
   if (!record) throw new ApiError(400, "Please request a verification code first");
 
@@ -65,6 +69,16 @@ export async function verifyOtp(rawEmail: string, code: string): Promise<void> {
     await Otp.updateOne({ email }, { $inc: { attempts: 1 } });
     throw new ApiError(400, "Invalid code");
   }
+}
 
+/** Verify without consuming — the code stays valid for a later verifyOtp(). */
+export async function checkOtp(rawEmail: string, code: string): Promise<void> {
+  await assertValidOtp(normalizeEmail(rawEmail), String(code));
+}
+
+/** Verify (and consume) the OTP for an email. Throws on any failure. */
+export async function verifyOtp(rawEmail: string, code: string): Promise<void> {
+  const email = normalizeEmail(rawEmail);
+  await assertValidOtp(email, String(code));
   await Otp.deleteOne({ email }); // single-use
 }

@@ -34,9 +34,10 @@ export async function updatePurchase(req: Request, res: Response): Promise<void>
 }
 
 export async function deletePurchase(req: Request, res: Response): Promise<void> {
+  // "Delete" is a soft void: the record is kept for audit, its effects reversed.
   ok(
     res,
-    await purchaseService.deletePurchase(uid(req), req.params.id),
-    "Purchase invoice deleted"
+    await purchaseService.voidPurchase(uid(req), req.params.id),
+    "Purchase invoice voided"
   );
 }

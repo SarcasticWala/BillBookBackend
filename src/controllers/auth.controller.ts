@@ -12,6 +12,11 @@ export async function sendOtp(req: Request, res: Response): Promise<void> {
   res.json({ message: "Verification code sent", ...result });
 }
 
+export async function verifyOtp(req: Request, res: Response): Promise<void> {
+  const result = await authService.verifyEmailOtp(req.body);
+  res.json({ message: "Code verified", data: result });
+}
+
 export async function register(req: Request, res: Response): Promise<void> {
   const result = await authService.register(req.body);
   res.status(201).json({ token: result.token, data: result.user });

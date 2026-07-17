@@ -13,6 +13,18 @@ export async function createAccount(req: Request, res: Response): Promise<void> 
   created(res, await accountService.createAccount(uid(req), req.body ?? {}), "Account created");
 }
 
+export async function getAccount(req: Request, res: Response): Promise<void> {
+  ok(res, await accountService.getAccount(uid(req), req.params.id));
+}
+
+export async function updateAccount(req: Request, res: Response): Promise<void> {
+  ok(
+    res,
+    await accountService.updateAccount(uid(req), req.params.id, req.body ?? {}),
+    "Account updated"
+  );
+}
+
 export async function adjustMoney(req: Request, res: Response): Promise<void> {
   ok(
     res,

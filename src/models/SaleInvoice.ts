@@ -29,7 +29,11 @@ const saleInvoiceSchema = new Schema(
     cash: { type: Number, default: 0 },
     online: { type: Number, default: 0 },
 
-    status: { type: String, enum: ["PAID", "PARTIAL", "UNPAID"], default: "UNPAID" },
+    status: {
+      type: String,
+      enum: ["PAID", "PARTIAL", "UNPAID", "VOID"],
+      default: "UNPAID",
+    },
     notes: { type: String, default: "" },
     termsAndConditions: { type: String, default: "" },
   },

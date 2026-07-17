@@ -7,13 +7,14 @@ import {
 } from "../controllers/demo.controller";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { idempotency } from "../middleware/idempotency";
 import { demoBookSchema, demoStatusSchema } from "../validation/schemas";
 import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
 router.use(requireAuth);
 
-router.post("/book", validate(demoBookSchema), asyncHandler(bookDemo));
+router.post("/book", validate(demoBookSchema), idempotency, asyncHandler(bookDemo));
 router.get("/list", asyncHandler(getDemos));
 
 // Admin-only: view every request and update its status.

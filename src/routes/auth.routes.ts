@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   sendOtp,
+  verifyOtp,
   register,
   login,
   resetPassword,
@@ -16,12 +17,14 @@ import {
   registerSchema,
   resetPasswordSchema,
   sendOtpSchema,
+  verifyOtpSchema,
 } from "../validation/schemas";
 import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
 
 router.post("/send-otp", otpLimiter, validate(sendOtpSchema), asyncHandler(sendOtp));
+router.post("/verify-otp", otpLimiter, validate(verifyOtpSchema), asyncHandler(verifyOtp));
 router.post("/register", validate(registerSchema), asyncHandler(register));
 router.post("/login", validate(loginSchema), asyncHandler(login));
 router.post(

@@ -68,6 +68,45 @@ export async function createAccount(
   return withId(account.toObject());
 }
 
+export async function getAccount(userId: Types.ObjectId, id: string) {
+  const account = await Account.findOne({ _id: id, user: userId }).lean();
+  if (!account) throw new ApiError(404, "Account not found");
+  return withId(account);
+}
+
+export async function updateAccount(
+  userId: Types.ObjectId,
+  id: string,
+  body: Record<string, any>
+) {
+  const account = await Account.findOne({ _id: id, user: userId });
+  if (!account) throw new ApiError(404, "Account not found");
+
+  const name = String(body.name || "").trim();
+  if (!name) throw new ApiError(400, "Account name is required");
+  const type =
+    String(body.type || account.type).toUpperCase() === "CASH" ? "CASH" : "BANK";
+
+  // Editing the opening balance shifts the running balance by the same delta,
+  // so recorded movements stay intact.
+  if (body.openingBalance != null && body.openingBalance !== "") {
+    const newOpening = num(body.openingBalance);
+    const delta = newOpening - num(account.openingBalance);
+    account.openingBalance = newOpening;
+    account.balance = num(account.balance) + delta;
+  }
+
+  account.name = name;
+  account.type = type;
+  if (body.bankName != null) account.bankName = body.bankName;
+  if (body.accountNumber != null) account.accountNumber = body.accountNumber;
+  if (body.ifsc != null) account.ifsc = body.ifsc;
+  if (body.upiId != null) account.upiId = body.upiId;
+
+  await account.save();
+  return withId(account.toObject());
+}
+
 export async function adjustMoney(
   userId: Types.ObjectId,
   accountId: string,
@@ -79,6 +118,14 @@ export async function adjustMoney(
 
   const account = await Account.findOne({ _id: accountId, user: userId });
   if (!account) throw new ApiError(404, "Account not found");
+
+  // Don't let a reduction push the account negative.
+  if (direction === "OUT" && amount > num(account.balance)) {
+    throw new ApiError(
+      400,
+      `Amount exceeds available balance (₹${num(account.balance).toLocaleString("en-IN")})`
+    );
+  }
 
   const delta = direction === "IN" ? amount : -amount;
   account.balance = num(account.balance) + delta;
@@ -112,6 +159,14 @@ export async function transferMoney(
     Account.findOne({ _id: body.toAccountId, user: userId }),
   ]);
   if (!from || !to) throw new ApiError(404, "Account not found");
+
+  // Can't transfer more than the source account holds.
+  if (amount > num(from.balance)) {
+    throw new ApiError(
+      400,
+      `Insufficient balance in ${from.name} (₹${num(from.balance).toLocaleString("en-IN")})`
+    );
+  }
 
   from.balance = num(from.balance) - amount;
   to.balance = num(to.balance) + amount;

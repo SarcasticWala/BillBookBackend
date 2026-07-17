@@ -3,7 +3,7 @@ import { User } from "../models/User";
 import { signToken } from "../utils/jwt";
 import { ApiError } from "../utils/ApiError";
 import { isAdminPhone } from "../middleware/auth";
-import { verifyOtp } from "./otp.service";
+import { verifyOtp, checkOtp } from "./otp.service";
 
 const BCRYPT_ROUNDS = 10;
 
@@ -52,6 +52,12 @@ export async function register(body: {
   const user = created.toObject();
   const token = signToken({ userId: String(user._id), phone: user.phone });
   return { token, user: sanitize(user) };
+}
+
+/** Verify an email OTP without consuming it (for a dedicated verify step). */
+export async function verifyEmailOtp(body: { email: string; otp: string }) {
+  await checkOtp(body.email.toLowerCase().trim(), body.otp);
+  return { verified: true };
 }
 
 export async function login(body: { email: string; password: string }) {
