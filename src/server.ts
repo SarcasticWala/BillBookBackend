@@ -14,6 +14,18 @@ async function start() {
     server = app.listen(env.port, () => {
       logger.info(`Server listening on http://localhost:${env.port} (${env.nodeEnv})`);
     });
+    // `listen` emits 'error' asynchronously — an uncaught one crashes the process.
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        logger.error(
+          `Port ${env.port} is already in use — another process (likely a stale dev server) is holding it. ` +
+            `Stop it and retry, e.g.: Get-NetTCPConnection -LocalPort ${env.port} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`
+        );
+      } else {
+        logger.error({ err }, "HTTP server error");
+      }
+      process.exit(1);
+    });
   } catch (err) {
     logger.error({ err }, "Server failed to start");
     process.exit(1);
