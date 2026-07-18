@@ -29,7 +29,7 @@ export function idempotency(req: Request, res: Response, next: NextFunction): vo
       });
       recordId = created._id;
     } catch (err: any) {
-      // Duplicate (user, key) → someone already used this key.
+      // Duplicate (user, key) 
       if (err?.code === 11000) {
         const existing = await IdempotencyKey.findOne({ user, key }).lean();
         if (existing?.status === "done") {
