@@ -4,38 +4,58 @@ import { Party } from "../models/Party";
 import { ApiError } from "../utils/ApiError";
 import { getPaging } from "../utils/pagination";
 import { withId, withIds } from "../utils/serialize";
-import { applyStockDelta, computeStatus, InvoiceItemRow } from "./invoice.shared";
+import {
+  applyStockDelta,
+  computeStatus,
+  computeInvoiceTotals,
+  InvoiceItemRow,
+} from "./invoice.shared";
 
-const num = (v: unknown): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
+/** Reject a duplicate purchase invoice number for this business. */
+async function assertInvoiceNoUnique(
+  userId: Types.ObjectId,
+  invioceNo: string,
+  ignoreId?: Types.ObjectId
+) {
+  if (!invioceNo) return;
+  const filter: Record<string, any> = { user: userId, invioceNo };
+  if (ignoreId) filter._id = { $ne: ignoreId };
+  const dup = await PurchaseInvoice.findOne(filter).lean();
+  if (dup) throw new ApiError(409, `Invoice number "${invioceNo}" already exists`);
+}
 
 export async function createPurchase(userId: Types.ObjectId, body: Record<string, any>) {
   const rows: InvoiceItemRow[] = Array.isArray(body.itemDetails) ? body.itemDetails : [];
   if (!body.partyId) throw new ApiError(400, "partyId is required");
   if (!rows.length) throw new ApiError(400, "At least one item is required");
 
+  const invioceNo = String(body.invioceNo ?? "").trim();
+  await assertInvoiceNoUnique(userId, invioceNo);
+
   const party = await Party.findOne({ _id: body.partyId, user: userId }).lean();
   if (!party) throw new ApiError(404, "Party (supplier) not found");
 
-  const grand = num(body.totalSaleAmount);
-  const received = num(body.receivedAmount);
-  const dueAmount = body.dueAmount != null ? num(body.dueAmount) : Math.max(0, grand - received);
+  // Money is server-authoritative — re-derive from the line items.
+  const t = computeInvoiceTotals(rows, body, body.paidAmount ?? body.receivedAmount);
 
   const invoice = await PurchaseInvoice.create({
     ...body,
     user: userId,
     partyId: party._id,
     partyName: party.partyName,
-    dueAmount,
-    status: computeStatus(dueAmount, received),
+    invioceNo,
+    totalPurchaseAmount: t.grand,
+    additionalCharges: t.additionalCharges,
+    discountAfterTax: t.discountAfterTax,
+    paidAmount: t.paid,
+    dueAmount: t.dueAmount,
+    status: computeStatus(t.dueAmount, t.paid),
   });
 
   // A purchase brings stock in and increases what we owe the supplier.
   await applyStockDelta(userId, rows, 1);
-  if (dueAmount > 0) {
-    await Party.updateOne({ _id: party._id }, { $inc: { balance: -dueAmount } });
+  if (t.dueAmount > 0) {
+    await Party.updateOne({ _id: party._id }, { $inc: { balance: -t.dueAmount } });
   }
 
   return withId(invoice.toObject());
@@ -127,6 +147,9 @@ export async function updatePurchase(
   if (!body.partyId) throw new ApiError(400, "partyId is required");
   if (!rows.length) throw new ApiError(400, "At least one item is required");
 
+  const invioceNo = String(body.invioceNo ?? existing.invioceNo ?? "").trim();
+  await assertInvoiceNoUnique(userId, invioceNo, existing._id);
+
   const party = await Party.findOne({ _id: body.partyId, user: userId }).lean();
   if (!party) throw new ApiError(404, "Party (supplier) not found");
 
@@ -140,10 +163,8 @@ export async function updatePurchase(
     );
   }
 
-  const grand = num(body.totalPurchaseAmount ?? body.totalSaleAmount);
-  const received = num(body.receivedAmount ?? body.paidAmount);
-  const dueAmount =
-    body.dueAmount != null ? num(body.dueAmount) : Math.max(0, grand - received);
+  // Server-authoritative money (see createPurchase).
+  const t = computeInvoiceTotals(rows, body, body.paidAmount ?? body.receivedAmount);
 
   // Strip identity fields so a round-tripped payload can't clobber them.
   const { id: _drop, _id: _drop2, user: _drop3, ...clean } = body;
@@ -151,15 +172,20 @@ export async function updatePurchase(
     ...clean,
     partyId: party._id,
     partyName: party.partyName,
-    dueAmount,
-    status: computeStatus(dueAmount, received),
+    invioceNo,
+    totalPurchaseAmount: t.grand,
+    additionalCharges: t.additionalCharges,
+    discountAfterTax: t.discountAfterTax,
+    paidAmount: t.paid,
+    dueAmount: t.dueAmount,
+    status: computeStatus(t.dueAmount, t.paid),
   });
   await existing.save();
 
   // Re-apply the new payload's effects.
   await applyStockDelta(userId, rows, 1);
-  if (dueAmount > 0) {
-    await Party.updateOne({ _id: party._id }, { $inc: { balance: -dueAmount } });
+  if (t.dueAmount > 0) {
+    await Party.updateOne({ _id: party._id }, { $inc: { balance: -t.dueAmount } });
   }
 
   return withId(existing.toObject());

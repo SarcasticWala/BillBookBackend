@@ -33,3 +33,38 @@ export function computeStatus(dueAmount: number, receivedAmount: number): string
   if (receivedAmount > 0) return "PARTIAL";
   return "UNPAID";
 }
+
+const toNum = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * Server-authoritative invoice money. The client computes these too (for
+ * display), but we never trust them: we re-derive the grand total from the
+ * line items (sum of each row's own total) plus additional charges minus the
+ * after-tax discount, clamp everything non-negative (a "discount" can't be a
+ * surcharge, amounts can't be negative), and compute the balance from what was
+ * actually paid. For an honest client this yields exactly the same numbers.
+ */
+export function computeInvoiceTotals(
+  rows: InvoiceItemRow[],
+  body: Record<string, any>,
+  paidRaw: unknown
+): {
+  grand: number;
+  additionalCharges: number;
+  discountAfterTax: number;
+  paid: number;
+  dueAmount: number;
+} {
+  const lineSum = rows.reduce((a, r) => a + toNum((r as any).totalAmount), 0);
+  const additionalCharges = Math.max(0, toNum(body.additionalCharges));
+  const discountAfterTax = Math.max(0, toNum(body.discountAfterTax));
+  const grand = Math.max(0, round2(lineSum + additionalCharges - discountAfterTax));
+  const paid = Math.max(0, toNum(paidRaw));
+  const dueAmount = Math.max(0, round2(grand - paid));
+  return { grand, additionalCharges, discountAfterTax, paid, dueAmount };
+}
+
+const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;

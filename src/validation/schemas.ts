@@ -53,6 +53,8 @@ export const partyCreateSchema = z
   .object({
     partyName: z.string().min(1, "Party name is required"),
     partyType: z.enum(["CUSTOMER", "SUPPLIER"]).optional(),
+    // Validate format only when a value is actually provided (empty allowed).
+    email: z.string().email("Enter a valid email").or(z.literal("")).optional(),
   })
   .passthrough();
 

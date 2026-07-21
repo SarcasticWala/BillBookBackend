@@ -15,6 +15,7 @@ import {
 import { requireAuth } from "../middleware/auth";
 import { upload } from "../middleware/upload";
 import { validate } from "../middleware/validate";
+import { idempotency } from "../middleware/idempotency";
 import { updateStockSchema, categorySchema } from "../validation/schemas";
 import { asyncHandler } from "../utils/asyncHandler";
 
@@ -22,7 +23,7 @@ const router = Router();
 router.use(requireAuth);
 
 // Item create sends up to 5 images under the field name "itemImages".
-router.post("/create", upload.array("itemImages", 5), asyncHandler(createItem));
+router.post("/create", upload.array("itemImages", 5), idempotency, asyncHandler(createItem));
 router.post("/bulk-create-items", upload.single("file"), asyncHandler(bulkCreateItems));
 
 router.get("/items", asyncHandler(getItems));
