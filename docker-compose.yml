@@ -1,0 +1,57 @@
+# Runs the full stack (mongo + backend + frontend) locally. The frontend
+# build context is "../billbook_frontend" — this repo and billbook_frontend
+# must be checked out as sibling folders for this to work.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: billbook
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # Container always runs the production build, regardless of what
+      # NODE_ENV is set to in .env for local `npm run dev` — dev mode pulls
+      # in pino-pretty, which isn't installed in this image.
+      NODE_ENV: production
+      # Overrides whatever MONGO_URI is in .env — inside the compose network
+      # the database is reachable at the "mongo" service name, not localhost.
+      MONGO_URI: mongodb://mongo:27017/billbook
+      # Always the compose frontend's origin — not whatever CORS_ORIGINS is
+      # set to in .env for other setups (e.g. the Vite dev server on 5173).
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-8080}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+
+  frontend:
+    build:
+      context: ../billbook_frontend
+      args:
+        # Vite bakes this in at build time, so it must point at wherever the
+        # backend is reachable from the BROWSER (not the docker network).
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  mongo_data:
