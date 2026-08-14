@@ -18,6 +18,7 @@ import accountRoutes from "./routes/account.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import expenseRoutes from "./routes/expense.routes";
 import { notFound, errorHandler } from "./middleware/error";
+import { mountDocs } from "./docs/swagger";
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,10 @@ export function createApp() {
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", uptime: process.uptime() });
   });
+
+  // Interactive API docs (development only — no-op in production). Mounted
+  // before the rate limiter so browsing the docs is never throttled.
+  mountDocs(app);
 
   app.use("/api", apiLimiter);
   app.use("/api/auth", authLimiter, authRoutes);
