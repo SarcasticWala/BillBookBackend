@@ -68,7 +68,7 @@ export const updateStockSchema = z
   })
   .passthrough();
 
-const invoiceItemRow = z
+export const invoiceItemRow = z
   .object({
     itemId: z.string().optional(),
     quantity: z.number().optional(),
@@ -84,6 +84,37 @@ export const saleCreateSchema = z
   .passthrough();
 
 export const purchaseCreateSchema = saleCreateSchema;
+
+export const automatedBillTemplateCreateSchema = z
+  .object({
+    partyId: z.string().min(1, "partyId is required"),
+    itemDetails: z.array(invoiceItemRow).min(1, "At least one item is required"),
+    frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"]),
+    startDate: z.string().min(1, "startDate is required"),
+    endDate: z.string().optional(),
+    occurrenceCount: z.number().int().positive().optional(),
+    autoPost: z.boolean().optional(),
+  })
+  .passthrough();
+
+export const automatedBillTemplateUpdateSchema = z.object({}).passthrough();
+
+// POS checkout — no invioceNo (server-generated) and no partyId (defaults to
+// a walk-in customer); paid in full at checkout via one or more accounts.
+export const posCheckoutSchema = z
+  .object({
+    itemDetails: z.array(invoiceItemRow).min(1, "At least one item is required"),
+    payments: z
+      .array(
+        z.object({
+          accountId: z.string().min(1, "accountId is required"),
+          amount: z.number().positive("amount must be greater than 0"),
+        })
+      )
+      .min(1, "At least one payment is required"),
+    partyId: z.string().optional(),
+  })
+  .passthrough();
 
 export const demoBookSchema = z
   .object({

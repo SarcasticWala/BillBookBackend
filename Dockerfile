@@ -1,8 +1,12 @@
 # --- deps (full, incl. dev, for the build stage) ---
+# Plain `npm install`, not `npm ci`: an optional transitive dep of the mongodb
+# driver (gcp-metadata, pulled in for unused GCP IAM auth) resolves
+# inconsistently across npm runs, which npm ci treats as a hard mismatch.
+# `npm install` tolerates it — same as Render's build (npm install && build).
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 # --- build TypeScript -> dist ---
 FROM node:20-alpine AS build
@@ -16,7 +20,7 @@ RUN npm run build
 FROM node:20-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # --- runtime ---
 FROM node:20-alpine

@@ -14,8 +14,26 @@ function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+function bool(name: string, fallback: boolean): boolean {
+  const value = process.env[name];
+  if (value == null) return fallback;
+  return value === "true" || value === "1";
+}
+
+const nodeEnv = optional("NODE_ENV", "development");
+const isProduction = nodeEnv === "production";
+
+// Production connects to the existing MongoDB exactly as before (MONGO_URI,
+// required — unchanged behavior). Any other environment (local dev, test, or
+// a missing/unknown NODE_ENV) defaults to a local MongoDB instance instead,
+// so it can never accidentally end up pointing at production. Override with
+// MONGO_URI_LOCAL if local/test needs a different database.
+const mongoUri = isProduction
+  ? required("MONGO_URI")
+  : optional("MONGO_URI_LOCAL", "mongodb://127.0.0.1:27017/billbook");
+
 export const env = {
-  nodeEnv: optional("NODE_ENV", "development"),
+  nodeEnv,
   port: parseInt(optional("PORT", "5000"), 10),
   corsOrigins: optional("CORS_ORIGINS", "http://localhost:5173")
     .split(",")
@@ -28,19 +46,18 @@ export const env = {
     .map((p) => p.trim())
     .filter(Boolean),
 
-  mongoUri: required("MONGO_URI"),
+  mongoUri,
+
+  // New modules ship dark by default — each is off until explicitly enabled.
+  flags: {
+    scheduler: bool("FEATURE_SCHEDULER", false),
+    posBilling: bool("FEATURE_POS_BILLING", false),
+    automatedBills: bool("FEATURE_AUTOMATED_BILLS", false),
+    eInvoicing: bool("FEATURE_E_INVOICING", false),
+  },
 
   jwtSecret: required("JWT_SECRET"),
   jwtExpiresIn: optional("JWT_EXPIRES_IN", "7d"),
-
-  // Firebase is no longer used for auth (email/password + backend OTP). These
-  // are optional so the backend boots without Firebase credentials.
-  firebase: {
-    projectId: optional("FIREBASE_PROJECT_ID", ""),
-    clientEmail: optional("FIREBASE_CLIENT_EMAIL", ""),
-    // Env-stored keys escape newlines; restore them for the SDK.
-    privateKey: optional("FIREBASE_PRIVATE_KEY", "").replace(/\\n/g, "\n"),
-  },
 
   cloudinary: {
     cloudName: required("CLOUDINARY_CLOUD_NAME"),
@@ -66,6 +83,23 @@ export const env = {
     // Sender address (your Gmail). Used as the "From" for both Gmail API and SMTP.
     from: optional("SMTP_FROM", ""),
   },
+
+  // GST e-Invoicing (IRP submission). "MOCK" simulates realistic IRN/QR
+  // responses for development; switch to "NIC" only once real NIC e-invoice
+  // API credentials are configured below. Never hardcode these credentials.
+  eInvoice: {
+    provider: optional("EINVOICE_PROVIDER", "MOCK"),
+    // Informational only (this app doesn't track turnover) — surfaced in the
+    // UI as a reminder of when e-invoicing becomes a legal requirement.
+    turnoverThresholdCr: parseFloat(optional("EINVOICE_TURNOVER_THRESHOLD_CR", "5")),
+    nic: {
+      gstin: optional("EINVOICE_NIC_GSTIN", ""),
+      username: optional("EINVOICE_NIC_USERNAME", ""),
+      password: optional("EINVOICE_NIC_PASSWORD", ""),
+      clientId: optional("EINVOICE_NIC_CLIENT_ID", ""),
+      clientSecret: optional("EINVOICE_NIC_CLIENT_SECRET", ""),
+    },
+  },
 };
 
-export const isProd = env.nodeEnv === "production";
+export const isProd = isProduction;

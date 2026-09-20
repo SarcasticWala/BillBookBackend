@@ -19,18 +19,20 @@ npm run build && npm start
 
 ## Environment variables
 
-See `.env.example`. Required: `MONGO_URI`, `JWT_SECRET`, Firebase Admin
-(`FIREBASE_PROJECT_ID`/`FIREBASE_CLIENT_EMAIL`/`FIREBASE_PRIVATE_KEY`), and
-Cloudinary (`CLOUDINARY_*`). Secrets live only in `.env` (gitignored).
+See `.env.example`. Required: `MONGO_URI`, `JWT_SECRET`, and Cloudinary
+(`CLOUDINARY_*`). Secrets live only in `.env` (gitignored).
 
 ## Auth model
 
-1. Frontend runs Firebase phone/OTP in the browser.
-2. On success it sends the Firebase **ID token** to `POST /api/auth/login`.
-3. Backend verifies it with the Firebase Admin SDK, upserts the user, and
-   returns a backend-issued **JWT**.
-4. All `/api/item`, `/api/party`, `/api/sale`, `/api/purchase` routes require
-   `Authorization: Bearer <jwt>`. Every record is scoped to the user.
+1. Signup: `POST /api/auth/send-otp` emails a 6-digit code, then
+   `POST /api/auth/register` (name, email, password, phone, otp) verifies it
+   and creates the account (email + bcrypt-hashed password are the
+   credentials — there is no Firebase/third-party auth involved).
+2. Login: `POST /api/auth/login` (email + password) returns a backend-issued
+   **JWT**.
+3. All `/api/item`, `/api/party`, `/api/sale`, `/api/purchase` (and every
+   other non-auth) route requires `Authorization: Bearer <jwt>`. Every record
+   is scoped to the user.
 
 ## Routes (matched to the frontend contract)
 
@@ -71,7 +73,7 @@ the client's read shape (`itemName`/`serviceName`, `gstRate: { value }`,
 
 ```
 src/
-  config/      env, db, firebase, cloudinary, logger
+  config/      env, db, cloudinary, logger
   models/      Mongoose schemas (+ indexes)
   middleware/  auth (JWT), error, upload (multer), validate (zod), rateLimit
   utils/       jwt, excel, cache, pagination, respond, serialize, ApiError, asyncHandler
@@ -80,6 +82,6 @@ src/
   routes/      one router per group
   validation/  zod schemas
   app.ts       express app: helmet, cors, compression, logging, routes
-  server.ts    boot: connect DB, init firebase, listen, graceful shutdown
+  server.ts    boot: connect DB, listen, graceful shutdown
   seed.ts      reference data seeder (taxes, units, states+cities)
 ```

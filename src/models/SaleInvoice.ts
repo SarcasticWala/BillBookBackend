@@ -36,12 +36,33 @@ const saleInvoiceSchema = new Schema(
     },
     notes: { type: String, default: "" },
     termsAndConditions: { type: String, default: "" },
+
+    // GST e-Invoicing (IRP submission). Every existing/new invoice defaults
+    // to NOT_APPLICABLE and is simply never touched unless it's eligible
+    // (B2B/export/SEZ party) and the business has e-invoicing enabled.
+    eInvoice: {
+      status: {
+        type: String,
+        enum: ["NOT_APPLICABLE", "PENDING", "GENERATED", "FAILED", "CANCELLED"],
+        default: "NOT_APPLICABLE",
+      },
+      irn: { type: String, default: "" },
+      ackNo: { type: String, default: "" },
+      ackDate: { type: Date, default: null },
+      signedQrCode: { type: String, default: "" },
+      generatedAt: { type: Date, default: null },
+      cancelledAt: { type: Date, default: null },
+      cancelReason: { type: String, default: "" },
+      error: { type: String, default: "" },
+    },
   },
   { timestamps: true, strict: false }
 );
 
 saleInvoiceSchema.index({ user: 1, createdAt: -1 });
 saleInvoiceSchema.index({ user: 1, invioceNo: 1 }, { unique: true });
+// The e-Invoice sweep's due-invoices query.
+saleInvoiceSchema.index({ "eInvoice.status": 1, createdAt: -1 });
 
 export type SaleInvoiceDoc = InferSchemaType<typeof saleInvoiceSchema> & {
   _id: Types.ObjectId;

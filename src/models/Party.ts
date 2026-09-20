@@ -20,6 +20,14 @@ const partySchema = new Schema(
     email: { type: String, default: "" },
     gstNumber: { type: String, default: "" },
     panNumber: { type: String, default: "" },
+    // DOMESTIC + a valid gstNumber = B2B (eligible for e-invoicing). EXPORT/SEZ
+    // are always eligible regardless of gstNumber. Defaults to DOMESTIC so
+    // every existing party keeps behaving as a plain B2C/domestic customer.
+    gstCategory: {
+      type: String,
+      enum: ["DOMESTIC", "EXPORT", "SEZ"],
+      default: "DOMESTIC",
+    },
 
     partyCatagory: { type: String, default: "" },
 

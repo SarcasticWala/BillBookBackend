@@ -17,6 +17,10 @@ import demoRoutes from "./routes/demo.routes";
 import accountRoutes from "./routes/account.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import expenseRoutes from "./routes/expense.routes";
+import posRoutes from "./routes/pos.routes";
+import automatedBillRoutes from "./routes/automatedBill.routes";
+import eInvoiceRoutes from "./routes/eInvoice.routes";
+import { requireFeature } from "./middleware/featureFlag";
 import { notFound, errorHandler } from "./middleware/error";
 import { mountDocs } from "./docs/swagger";
 
@@ -28,7 +32,19 @@ export function createApp() {
 
   app.use(helmet());
   app.use(compression());
-  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/health" } }));
+  app.use(
+    pinoHttp({
+      logger,
+      autoLogging: { ignore: (req) => req.url === "/health" },
+      // Default pino-http serializers dump every request/response header,
+      // which drowns out the one line per request that's actually useful
+      // day-to-day. Keep just method/url/statusCode.
+      serializers: {
+        req: (req) => ({ method: req.method, url: req.url }),
+        res: (res) => ({ statusCode: res.statusCode }),
+      },
+    })
+  );
 
   app.use(
     cors({
@@ -64,6 +80,13 @@ export function createApp() {
   app.use("/api/account", accountRoutes);
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/expense", expenseRoutes);
+  app.use("/api/pos", requireFeature("posBilling"), posRoutes);
+  app.use(
+    "/api/automated-bills",
+    requireFeature("automatedBills"),
+    automatedBillRoutes
+  );
+  app.use("/api/e-invoice", requireFeature("eInvoicing"), eInvoiceRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

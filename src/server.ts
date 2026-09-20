@@ -4,12 +4,27 @@ import { createApp } from "./app";
 import { connectDB } from "./config/db";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
+import { startScheduler, stopScheduler } from "./config/scheduler";
+import { scheduleAutomatedBillsTick } from "./services/automatedBill.scheduler";
+import { scheduleEInvoiceSweep } from "./services/eInvoice.scheduler";
 
 let server: Server;
 
 async function start() {
   try {
     await connectDB();
+    // No-op unless FEATURE_SCHEDULER is on. A scheduler failure shouldn't
+    // take down core billing/sales — log and keep booting.
+    await startScheduler().catch((err) =>
+      logger.error({ err }, "Scheduler failed to start")
+    );
+    // No-op unless FEATURE_AUTOMATED_BILLS is also on.
+    await scheduleAutomatedBillsTick().catch((err) =>
+      logger.error({ err }, "Automated Bills tick failed to schedule")
+    );
+    await scheduleEInvoiceSweep().catch((err) =>
+      logger.error({ err }, "e-Invoice sweep failed to schedule")
+    );
     const app = createApp();
     server = app.listen(env.port, () => {
       logger.info(`Server listening on http://localhost:${env.port} (${env.nodeEnv})`);
@@ -36,6 +51,9 @@ async function start() {
 async function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down gracefully`);
   server?.close(async () => {
+    await stopScheduler().catch((err) =>
+      logger.error({ err }, "Scheduler failed to stop cleanly")
+    );
     await mongoose.connection.close();
     logger.info("HTTP server + MongoDB connection closed");
     process.exit(0);

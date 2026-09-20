@@ -17,6 +17,10 @@ const userSchema = new Schema(
     state: { type: String, default: "" },
     address: { type: String, default: "" },
     logoUrl: { type: String, default: "" },
+
+    // GST e-Invoicing is opt-in per business — mandatory-by-turnover is a
+    // real GST rule, but this app doesn't track AATO, so it's a manual toggle.
+    eInvoicingEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

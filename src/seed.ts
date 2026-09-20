@@ -1,13 +1,19 @@
 /**
  * Seed global reference data: GST tax rates, units, and Indian state/city
- * locations. Run with:  npm run seed
+ * locations. Also seeds a local dev login (never in production). Run with:
+ * npm run seed
  */
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { connectDB } from "./config/db";
 import { Tax } from "./models/Tax";
 import { Unit } from "./models/Unit";
 import { Location } from "./models/Location";
+import { User } from "./models/User";
+import { env, isProd } from "./config/env";
 import { logger } from "./config/logger";
+
+const BCRYPT_ROUNDS = 10;
 
 const TAXES = [
   { name: "GST 0%", rate: 0 },
@@ -54,8 +60,38 @@ const STATE_CITIES: Record<string, [string, string[]]> = {
   "West Bengal": ["19", ["Kolkata", "Howrah", "Siliguri", "Durgapur"]],
 };
 
+// Local dev login — never seeded in production (guarded by isProd below).
+// Override via SEED_USER_EMAIL / SEED_USER_PASSWORD / SEED_USER_PHONE.
+async function seedDevUser() {
+  if (isProd) return;
+
+  const email = (process.env.SEED_USER_EMAIL || "dev@local.test").toLowerCase().trim();
+  const password = process.env.SEED_USER_PASSWORD || "Password123!";
+  const phone = process.env.SEED_USER_PHONE || "+911234567890";
+
+  const existing = await User.findOne({ email }).lean();
+  if (existing) {
+    logger.info(`Seed: dev user already exists (${email}) — leaving password as-is`);
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  await User.create({
+    name: "Dev User",
+    email,
+    password: passwordHash,
+    phone,
+    emailVerified: true,
+    businessName: "Local Dev Business",
+  });
+
+  logger.info(`Seed: created dev user — email=${email} password=${password}`);
+}
+
 async function seed() {
   await connectDB();
+
+  await seedDevUser();
 
   for (const t of TAXES) {
     await Tax.updateOne({ name: t.name }, { $set: t }, { upsert: true });
