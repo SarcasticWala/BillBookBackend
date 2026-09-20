@@ -21,7 +21,13 @@ function bool(name: string, fallback: boolean): boolean {
 }
 
 const nodeEnv = optional("NODE_ENV", "development");
-const isProduction = nodeEnv === "production";
+// Render does NOT set NODE_ENV=production automatically — it has to be added
+// explicitly in the dashboard, and if that's ever missed, NODE_ENV silently
+// stays "development". `RENDER=true` is injected unconditionally for every
+// Render service regardless of any user config, so treat it as an equally
+// valid "this is a real deployment" signal — a local machine never has this
+// set, so it can't weaken the local-safety guarantee below.
+const isProduction = nodeEnv === "production" || process.env.RENDER === "true";
 
 // Production connects to the existing MongoDB exactly as before (MONGO_URI,
 // required — unchanged behavior). Any other environment (local dev, test, or
