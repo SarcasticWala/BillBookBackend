@@ -77,6 +77,9 @@ export async function checkoutPos(userId: Types.ObjectId, body: Record<string, a
     partyId: String(party._id),
     invioceNo,
     receivedAmount: paidTotal,
+    // Enforced above: payment must cover the full total, so every POS sale
+    // is fully paid by construction.
+    isFullyPaid: true,
     channel: "POS",
   });
 

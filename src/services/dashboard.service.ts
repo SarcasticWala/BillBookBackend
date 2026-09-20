@@ -67,6 +67,13 @@ export async function getSummary(userId: Types.ObjectId) {
       type: "Purchase",
       no: s.invioceNo || "-",
       party: s.partyName || "-",
+      // purchase.service.ts explicitly writes `totalPurchaseAmount` (not
+      // `totalSaleAmount` — that field stays at its unused schema default of
+      // 0 on a PurchaseInvoice). Verified directly against a real created
+      // purchase invoice: this was correct originally; an earlier pass here
+      // "fixed" it to totalSaleAmount based on a schema read that missed the
+      // strict:false extra field purchase.service.ts actually sets — that
+      // was wrong and has been reverted.
       amount: num(s.totalPurchaseAmount),
       sign: -1 as const,
     })),

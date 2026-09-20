@@ -17,6 +17,7 @@ import demoRoutes from "./routes/demo.routes";
 import accountRoutes from "./routes/account.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import expenseRoutes from "./routes/expense.routes";
+import reportRoutes from "./routes/report.routes";
 import posRoutes from "./routes/pos.routes";
 import automatedBillRoutes from "./routes/automatedBill.routes";
 import eInvoiceRoutes from "./routes/eInvoice.routes";
@@ -31,6 +32,15 @@ export function createApp() {
   app.set("trust proxy", 1); // Render sits behind a proxy; needed for rate-limit IPs
 
   app.use(helmet());
+  // helmet doesn't set Permissions-Policy by default (its own header set
+  // dropped it years ago pending stable browser semantics) — add it directly.
+  app.use((_req, res, next) => {
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+    );
+    next();
+  });
   app.use(compression());
   app.use(
     pinoHttp({
@@ -80,6 +90,7 @@ export function createApp() {
   app.use("/api/account", accountRoutes);
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/expense", expenseRoutes);
+  app.use("/api/report", reportRoutes);
   app.use("/api/pos", requireFeature("posBilling"), posRoutes);
   app.use(
     "/api/automated-bills",
