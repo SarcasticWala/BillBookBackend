@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidGstin } from "../utils/gstin";
 
 // Payloads are rich and computed client-side, so schemas validate the
 // load-bearing fields and pass the rest through unchanged.
@@ -49,16 +50,30 @@ export const categorySchema = z
   .object({ name: z.string().min(1, "Category name is required") })
   .passthrough();
 
+// GSTIN is optional on a party (plenty of B2C customers have none), but a
+// value that IS provided must be a real, checksum-valid GSTIN — otherwise it
+// silently poisons e-invoice eligibility (isPartyEInvoiceEligible) and GSTR-1
+// reporting further down the line without ever telling the user why.
+const gstNumberField = z
+  .string()
+  .refine((v) => !v || isValidGstin(v), {
+    message: "Enter a valid 15-character GSTIN, e.g. 27AAPFU0939F1ZV",
+  })
+  .optional();
+
 export const partyCreateSchema = z
   .object({
     partyName: z.string().min(1, "Party name is required"),
     partyType: z.enum(["CUSTOMER", "SUPPLIER"]).optional(),
     // Validate format only when a value is actually provided (empty allowed).
     email: z.string().email("Enter a valid email").or(z.literal("")).optional(),
+    gstNumber: gstNumberField,
   })
   .passthrough();
 
-export const partyUpdateSchema = z.object({}).passthrough();
+export const partyUpdateSchema = z
+  .object({ gstNumber: gstNumberField })
+  .passthrough();
 
 export const updateStockSchema = z
   .object({
