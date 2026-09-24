@@ -14,7 +14,7 @@ function sanitize(user: any) {
 }
 
 // Store the phone in E.164 so admin checks (ADMIN_PHONES) keep matching.
-const toE164 = (phone: string) => `+91${String(phone).replace(/\D/g, "").slice(-10)}`;
+export const toE164 = (phone: string) => `+91${String(phone).replace(/\D/g, "").slice(-10)}`;
 
 export async function register(body: {
   name: string;

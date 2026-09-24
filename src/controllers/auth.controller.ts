@@ -2,11 +2,33 @@ import { Request, Response } from "express";
 import * as authService from "../services/auth.service";
 import { ok } from "../utils/respond";
 import { ApiError } from "../utils/ApiError";
+import { User } from "../models/User";
+import { toE164 } from "../services/auth.service";
 
 import * as otpService from "../services/otp.service";
 
 export async function sendOtp(req: Request, res: Response): Promise<void> {
-  const result = await otpService.requestOtp(req.body?.email);
+  const email = String(req.body?.email || "").toLowerCase().trim();
+
+  // Signup only: reject a duplicate email or mobile number immediately,
+  // before OTP, so the UI doesn't advance to "Verify OTP" for an account
+  // that already exists. This trades away enumeration-resistance at this one
+  // step (an unauthenticated caller can learn whether an email/phone is
+  // registered) in exchange for clear, immediate feedback — a deliberate
+  // product call, not an oversight. The reset-password flow (purpose
+  // "reset", or no purpose at all) is untouched: it still never reveals
+  // whether an email exists, before or after OTP.
+  if (req.body?.purpose === "signup") {
+    if (await User.findOne({ email }).lean()) {
+      throw new ApiError(409, "An account with this email already exists");
+    }
+    const rawPhone = String(req.body?.phone || "").trim();
+    if (rawPhone && (await User.findOne({ phone: toE164(rawPhone) }).lean())) {
+      throw new ApiError(409, "An account with this mobile number already exists");
+    }
+  }
+
+  const result = await otpService.requestOtp(email);
   // devCode is present only in non-production when SMTP isn't configured, so
   // the flow stays testable without an email provider.
   res.json({ message: "Verification code sent", ...result });

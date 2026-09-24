@@ -21,7 +21,15 @@ const passwordField = z
   );
 
 // Request an email verification code (signup / password reset).
-export const sendOtpSchema = z.object({ email: z.string().email("Enter a valid email") });
+export const sendOtpSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  // Signup and forgot-password share this one endpoint but need opposite
+  // existence checks — optional so old clients / the reset flow keep working
+  // unchanged (see auth.controller.ts).
+  purpose: z.enum(["signup", "reset"]).optional(),
+  // Only used (and only present) for the signup duplicate-mobile check.
+  phone: z.string().optional(),
+});
 
 export const verifyOtpSchema = z.object({
   email: z.string().email("Enter a valid email"),
