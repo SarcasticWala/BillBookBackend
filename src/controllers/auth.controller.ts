@@ -66,6 +66,14 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
     if (req.file.size > 2 * 1024 * 1024) {
       throw new ApiError(400, "Logo image must be under 2MB");
     }
+    // PNG/JPEG only. This logo is re-embedded into every invoice PDF, and the
+    // PDF renderer can only embed JPG/PNG/SVG — storing e.g. a WebP here makes
+    // that user's invoice PDFs fail to render from then on, so it is rejected
+    // at the point of storage rather than left to fail later. The client
+    // enforces the same list, but a client check is not a check.
+    if (!["image/png", "image/jpeg"].includes(req.file.mimetype)) {
+      throw new ApiError(400, "Logo must be a PNG or JPG image");
+    }
     body.logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString(
       "base64"
     )}`;
