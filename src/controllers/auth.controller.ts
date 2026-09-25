@@ -58,6 +58,10 @@ export async function me(req: Request, res: Response): Promise<void> {
   ok(res, await authService.getProfile(req.userId!));
 }
 
+export async function logo(req: Request, res: Response): Promise<void> {
+  ok(res, await authService.getLogo(req.userId!));
+}
+
 export async function updateProfile(req: Request, res: Response): Promise<void> {
   const body: Record<string, unknown> = { ...(req.body ?? {}) };
   // Optional business logo (multipart field "logo"). Stored inline as a data

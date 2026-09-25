@@ -199,7 +199,11 @@ const schemas: Record<string, unknown> = {
       phone: { type: "string", description: "E.164, e.g. +919800054895." },
       emailVerified: { type: "boolean" },
       businessName: { type: "string" },
-      logoUrl: { type: "string", description: "Data-URI of the uploaded logo, if any." },
+      hasLogo: {
+        type: "boolean",
+        description:
+          "Whether a business logo is on file. The image itself is NOT returned here — it is a multi-megabyte data URI and this schema is served on every page load. Fetch it from GET /auth/logo.",
+      },
       createdAt: { type: "string", format: "date-time" },
       updatedAt: { type: "string", format: "date-time" },
     },

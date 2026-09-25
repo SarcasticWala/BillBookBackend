@@ -6,6 +6,7 @@ import {
   login,
   resetPassword,
   me,
+  logo,
   updateProfile,
 } from "../controllers/auth.controller";
 import { requireAuth } from "../middleware/auth";
@@ -33,6 +34,9 @@ router.post(
   asyncHandler(resetPassword)
 );
 router.get("/me", requireAuth, asyncHandler(me));
+// Kept off /me deliberately: the logo is a multi-megabyte data URI and /me is
+// fetched on every authenticated page load. See getProfile().
+router.get("/logo", requireAuth, asyncHandler(logo));
 router.put("/profile", requireAuth, upload.single("logo"), asyncHandler(updateProfile));
 
 export default router;

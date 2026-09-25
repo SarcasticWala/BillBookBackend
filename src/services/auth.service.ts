@@ -96,7 +96,22 @@ export async function resetPassword(body: {
 export async function getProfile(userId: string) {
   const user = await User.findById(userId).lean();
   if (!user) throw new ApiError(404, "User not found");
-  return { ...sanitize(user), isAdmin: isAdminPhone(user.phone) };
+  // `logoUrl` is an inline base64 data URI that can run to megabytes, and this
+  // endpoint is hit on every authenticated page load (ProtectedRoute gates the
+  // whole dashboard on it). Shipping the logo from here made /auth/me a
+  // ~1.6 MB blocking request — 80% of the app's entire page weight, and it
+  // delayed the invoice PDF, which needs `business` before it can render.
+  // Callers that actually display the image fetch it from /auth/logo instead;
+  // `hasLogo` lets the rest decide what to show without paying for the bytes.
+  const { logoUrl, ...rest } = sanitize(user);
+  return { ...rest, hasLogo: !!logoUrl, isAdmin: isAdminPhone(user.phone) };
+}
+
+/** The business logo on its own, for the few screens that render it. */
+export async function getLogo(userId: string) {
+  const user = await User.findById(userId).select("logoUrl").lean();
+  if (!user) throw new ApiError(404, "User not found");
+  return { logoUrl: user.logoUrl || "" };
 }
 
 export async function updateProfile(userId: string, body: Record<string, unknown>) {
@@ -106,5 +121,8 @@ export async function updateProfile(userId: string, body: Record<string, unknown
 
   const user = await User.findByIdAndUpdate(userId, update, { new: true }).lean();
   if (!user) throw new ApiError(404, "User not found");
-  return sanitize(user);
+  // Same reasoning as getProfile — don't echo the logo back in the response to
+  // a profile save that may have just uploaded it.
+  const { logoUrl: saved, ...rest } = sanitize(user);
+  return { ...rest, hasLogo: !!saved };
 }
