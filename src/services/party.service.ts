@@ -5,6 +5,10 @@ import { ApiError } from "../utils/ApiError";
 import { parseSheet, buildErrorWorkbook } from "../utils/excel";
 import { getPaging } from "../utils/pagination";
 import { withId, withIds } from "../utils/serialize";
+import {
+  signedOpeningBalance,
+  applyOpeningBalanceChange,
+} from "../utils/partyBalance";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -27,15 +31,96 @@ export async function createParty(userId: Types.ObjectId, body: Record<string, a
   return withId(party.toObject());
 }
 
+/**
+ * Fields a client may set on a party. Anything not listed here is ignored.
+ *
+ * `balance` is deliberately absent: it is derived money, owned by the server,
+ * moved only by invoices and payments. This used to spread the whole request
+ * body into the update, which made `balance` writable by anyone who could call
+ * the endpoint — a client could set any party's outstanding to any figure it
+ * liked. Validation didn't stop it either, because the party schema passes
+ * unknown keys through.
+ */
+const PARTY_UPDATABLE_FIELDS = [
+  "partyName",
+  "mobileNo",
+  "email",
+  "gstNumber",
+  "panNumber",
+  "partyType",
+  "partyCatagory",
+  "gstCategory",
+  "creditPeriod",
+  "creditLimit",
+  "isSameAddress",
+  "billingAddressData",
+  "shippingAddressData",
+  "openingBalance",
+  "openingBalanceType",
+] as const;
+
 export async function updateParty(
   userId: Types.ObjectId,
   id: string,
   body: Record<string, any>
 ) {
-  const { user, _id, id: _ignore, ...rest } = body;
-  const party = await Party.findOneAndUpdate({ _id: id, user: userId }, rest, {
-    new: true,
-  }).lean();
+  const existing = await Party.findOne({ _id: id, user: userId }).lean();
+  if (!existing) throw new ApiError(404, "Party not found");
+
+  const update: Record<string, unknown> = {};
+  for (const key of PARTY_UPDATABLE_FIELDS) {
+    if (key in body) update[key] = body[key];
+  }
+
+  // The opening balance is part of the running balance, so changing it has to
+  // move `balance` by the same amount. Previously `openingBalance` was updated
+  // on its own and `balance` was left alone, so the two silently desynced and
+  // the party's outstanding was wrong by the size of the edit — for good, since
+  // nothing recomputed it afterwards. Adjust by the *delta* rather than
+  // recomputing from scratch, so every invoice and payment effect already
+  // accumulated in `balance` is preserved.
+  const openingChanged =
+    "openingBalance" in body || "openingBalanceType" in body;
+  if (openingChanged) {
+    const oldOpening = signedOpeningBalance(
+      (existing as any).openingBalance,
+      (existing as any).openingBalanceType
+    );
+    const newOpening = signedOpeningBalance(
+      "openingBalance" in body
+        ? num(body.openingBalance)
+        : (existing as any).openingBalance,
+      "openingBalanceType" in body
+        ? body.openingBalanceType
+        : (existing as any).openingBalanceType
+    );
+    if (newOpening !== oldOpening) {
+      update.balance = applyOpeningBalanceChange(
+        (existing as any).balance,
+        {
+          amount: (existing as any).openingBalance,
+          type: (existing as any).openingBalanceType,
+        },
+        {
+          amount:
+            "openingBalance" in body
+              ? body.openingBalance
+              : (existing as any).openingBalance,
+          type:
+            "openingBalanceType" in body
+              ? body.openingBalanceType
+              : (existing as any).openingBalanceType,
+        }
+      );
+    }
+    if ("openingBalance" in body) update.openingBalance = num(body.openingBalance);
+  }
+
+  const party = await Party.findOneAndUpdate(
+    { _id: id, user: userId },
+    update,
+    { new: true }
+  ).lean();
   if (!party) throw new ApiError(404, "Party not found");
   return withId(party);
 }

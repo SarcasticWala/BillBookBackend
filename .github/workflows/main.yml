@@ -1,1 +1,47 @@
+name: CI
 
+# Runs on every push to main and on every PR targeting it, so a broken build
+# is caught at the point it is introduced rather than at deploy time.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Typecheck, unit tests, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Matches the version this project is developed against.
+          node-version: '22'
+          # Needs package-lock.json, which this repo commits.
+          cache: 'npm'
+
+      # `npm ci` rather than `npm install`: it installs exactly what the
+      # lockfile pins and fails if package.json and the lockfile disagree,
+      # so CI can't silently drift from local.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Every file under src/utils/__tests__ imports only pure functions
+      # (GSTIN checksum, GST tax split, recurrence, e-invoice eligibility,
+      # party balance, receivables aging). Nothing touches Mongo or reads a
+      # secret, so this job needs no database service and no repository
+      # secrets. Keep it that way — a unit suite that needs infrastructure
+      # stops being run.
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build

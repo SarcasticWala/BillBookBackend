@@ -4,6 +4,8 @@ import { Party } from "../models/Party";
 import { ApiError } from "../utils/ApiError";
 import { getPaging } from "../utils/pagination";
 import { withId, withIds } from "../utils/serialize";
+import { paymentBalanceDelta, type PaymentType } from "../utils/partyBalance";
+import { logger } from "../config/logger";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -41,6 +43,41 @@ export async function createPayment(
     reference: body.reference || "",
     notes: body.notes || "",
   });
+
+  // Keep `Party.balance` in step with the payment, the same way sale and
+  // purchase invoices already do. This was the gap behind BR-09 / PAY-03:
+  // invoices maintained the running balance but a standalone Payment never
+  // did, so the stored field — which the Dashboard's To Collect / To Pay
+  // reads directly — overstated what a party actually owed as soon as they
+  // paid anything. Written after the Payment row so a failed insert can't
+  // move the balance; the reverse order would lose money on a partial write.
+  //
+  // These are two writes without a transaction, matching how sale.service and
+  // purchase.service already do it (Mongo transactions need a replica set,
+  // which local dev doesn't run). So the second write can fail on its own.
+  // When it does, the Payment row is the record that matters and it is already
+  // safely stored — `Party.balance` is only a cache of it. Failing the whole
+  // request here would be the worse outcome: the caller would retry and book
+  // the same payment twice. Log it loudly instead and let the reconciliation
+  // script repair the cache; that is precisely what it exists for.
+  try {
+    await Party.updateOne(
+      { _id: party._id, user: userId },
+      { $inc: { balance: paymentBalanceDelta(type as PaymentType, amount) } }
+    );
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        paymentId: String(payment._id),
+        partyId: String(party._id),
+        userId: String(userId),
+        remedy: "npm run reconcile:balances",
+      },
+      "Payment stored but Party.balance update failed — balance is stale for this party until reconciled"
+    );
+  }
+
   return withId(payment.toObject());
 }
 

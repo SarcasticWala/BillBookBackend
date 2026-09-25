@@ -31,3 +31,7 @@ export async function getPartyLedger(req: Request, res: Response): Promise<void>
 export async function getStockSummary(req: Request, res: Response): Promise<void> {
   ok(res, await reportService.stockSummary(uid(req), req.query.lowStockOnly));
 }
+
+export async function getReceivablesAging(req: Request, res: Response): Promise<void> {
+  ok(res, await reportService.receivablesAging(uid(req), req.query.asOf));
+}

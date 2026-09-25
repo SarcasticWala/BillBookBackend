@@ -6,6 +6,18 @@ import { Expense } from "../models/Expense";
 import { Party } from "../models/Party";
 import { Item } from "../models/Item";
 import { ApiError } from "../utils/ApiError";
+import {
+  computePartyBalance,
+  signedOpeningBalance,
+  splitReceivablePayable,
+} from "../utils/partyBalance";
+import {
+  ageInvoices,
+  sumBuckets,
+  AGING_BUCKETS,
+  AGING_BUCKET_LABELS,
+  type AgeableInvoice,
+} from "../utils/receivablesAging";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -195,42 +207,76 @@ export async function daybook(userId: Types.ObjectId, from?: unknown, to?: unkno
 }
 
 /**
- * Party Wise Outstanding: `Party.balance` is kept in sync with sale/purchase
- * invoices as they're created/edited/voided, but standalone Payment records
- * are never applied to it — so it alone under/overstates what's actually
- * outstanding once a party has any payment history. Adjust it here with the
- * net payment effect (PAYMENT_IN reduces what they owe us, PAYMENT_OUT
- * reduces what we owe them) rather than trusting the stored field as-is.
+ * Party Wise Outstanding — derived from source records, never from the stored
+ * `Party.balance`.
+ *
+ * This used to read the stored field and add back the net payment effect,
+ * because payments didn't update it. They do now (`payment.service`), so that
+ * compensation would double-count every payment. Rather than swap one
+ * assumption about the cache for another, this rebuilds the figure from the
+ * invoices and payments themselves via `computePartyBalance` — the same
+ * function the reconciliation script and the ledger agree with.
+ *
+ * The practical benefit: this report is correct whether or not the one-time
+ * balance backfill has been run, so report accuracy doesn't depend on
+ * deployment ordering.
  */
 export async function partyOutstanding(userId: Types.ObjectId) {
-  const [parties, paymentAgg] = await Promise.all([
-    Party.find({ user: userId }).select("partyName partyType mobileNo balance").lean(),
+  const [parties, saleAgg, purchaseAgg, paymentAgg] = await Promise.all([
+    Party.find({ user: userId })
+      .select("partyName partyType mobileNo openingBalance openingBalanceType")
+      .lean(),
+    SaleInvoice.aggregate([
+      { $match: { user: userId, status: { $ne: "VOID" } } },
+      { $group: { _id: "$partyId", total: { $sum: "$dueAmount" } } },
+    ]),
+    PurchaseInvoice.aggregate([
+      { $match: { user: userId, status: { $ne: "VOID" } } },
+      { $group: { _id: "$partyId", total: { $sum: "$dueAmount" } } },
+    ]),
     Payment.aggregate([
       { $match: { user: userId } },
       { $group: { _id: { partyId: "$partyId", type: "$type" }, total: { $sum: "$amount" } } },
     ]),
   ]);
 
-  const paymentByParty = new Map<string, { in: number; out: number }>();
+  const byParty = new Map<
+    string,
+    { saleDue: number; purchaseDue: number; paymentIn: number; paymentOut: number }
+  >();
+  const bucket = (id: unknown) => {
+    const key = String(id);
+    let e = byParty.get(key);
+    if (!e) {
+      e = { saleDue: 0, purchaseDue: 0, paymentIn: 0, paymentOut: 0 };
+      byParty.set(key, e);
+    }
+    return e;
+  };
+
+  for (const row of saleAgg as any[]) bucket(row._id).saleDue += num(row.total);
+  for (const row of purchaseAgg as any[]) bucket(row._id).purchaseDue += num(row.total);
   for (const row of paymentAgg as any[]) {
-    const key = String(row._id.partyId);
-    const entry = paymentByParty.get(key) || { in: 0, out: 0 };
-    if (row._id.type === "PAYMENT_IN") entry.in += num(row.total);
-    else entry.out += num(row.total);
-    paymentByParty.set(key, entry);
+    const e = bucket(row._id.partyId);
+    if (row._id.type === "PAYMENT_IN") e.paymentIn += num(row.total);
+    else e.paymentOut += num(row.total);
   }
 
   return parties
     .map((p: any) => {
-      const pay = paymentByParty.get(String(p._id)) || { in: 0, out: 0 };
-      const outstanding = num(p.balance) - pay.in + pay.out;
+      const src = byParty.get(String(p._id));
+      const outstanding = computePartyBalance({
+        openingBalance: p.openingBalance,
+        openingBalanceType: p.openingBalanceType,
+        ...src,
+      });
       return {
         id: p._id,
         partyName: p.partyName,
         partyType: p.partyType,
         mobileNo: p.mobileNo,
         outstanding,
-        status: outstanding > 0 ? "TO_COLLECT" : outstanding < 0 ? "TO_PAY" : "SETTLED",
+        ...splitReceivablePayable(outstanding),
       };
     })
     .sort((a, b) => Math.abs(b.outstanding) - Math.abs(a.outstanding));
@@ -353,5 +399,119 @@ export async function stockSummary(userId: Types.ObjectId, lowStockOnly?: unknow
       lowStockCount: rows.filter((r) => r.isLow).length,
     },
     items: filtered,
+  };
+}
+
+/**
+ * Receivables Aging: what customers owe, split by how overdue it is.
+ *
+ * Extends the Dashboard's "To Collect" from a single number into the question
+ * an owner actually needs answered — *how old* is that money. The aging rules
+ * (aged from due date, not-yet-due kept separate, standalone payments applied
+ * oldest-first) live in `utils/receivablesAging.ts` and are unit-covered.
+ *
+ * Scope, stated so the figure can be trusted:
+ *  - Sale invoices only. Purchases are money we owe, not money owed to us.
+ *  - VOID invoices excluded, matching every other report.
+ *  - Opening balances carry no date, so they cannot be aged. They are reported
+ *    separately in `reconciliation` rather than guessed into a bucket — that
+ *    is the difference between this report's total and a party's full
+ *    outstanding.
+ */
+export async function receivablesAging(userId: Types.ObjectId, asOfInput?: unknown) {
+  const asOf = asOfInput ? new Date(String(asOfInput)) : new Date();
+  if (Number.isNaN(asOf.getTime())) throw new ApiError(400, "Invalid asOf date");
+
+  const [parties, invoices, paymentAgg] = await Promise.all([
+    Party.find({ user: userId })
+      .select("partyName partyType mobileNo openingBalance openingBalanceType")
+      .lean(),
+    SaleInvoice.find({ user: userId, status: { $ne: "VOID" }, dueAmount: { $gt: 0 } })
+      .select("partyId dueAmount dueDate invioceDate")
+      .lean(),
+    Payment.aggregate([
+      { $match: { user: userId } },
+      { $group: { _id: { partyId: "$partyId", type: "$type" }, total: { $sum: "$amount" } } },
+    ]),
+  ]);
+
+  const invoicesByParty = new Map<string, AgeableInvoice[]>();
+  for (const inv of invoices as any[]) {
+    const key = String(inv.partyId);
+    const list = invoicesByParty.get(key) || [];
+    list.push({
+      dueAmount: inv.dueAmount,
+      dueDate: inv.dueDate,
+      invoiceDate: inv.invioceDate,
+    });
+    invoicesByParty.set(key, list);
+  }
+
+  // Net standalone payment credit available to offset open invoices. Payments
+  // out reduce that credit because they are money moving the other way.
+  const creditByParty = new Map<string, number>();
+  for (const row of paymentAgg as any[]) {
+    const key = String(row._id.partyId);
+    const signed = row._id.type === "PAYMENT_IN" ? num(row.total) : -num(row.total);
+    creditByParty.set(key, (creditByParty.get(key) || 0) + signed);
+  }
+
+  const rows = [];
+  let openingNotAged = 0;
+  let unappliedCredit = 0;
+
+  for (const p of parties as any[]) {
+    const key = String(p._id);
+    const list = invoicesByParty.get(key) || [];
+    const opening = signedOpeningBalance(p.openingBalance, p.openingBalanceType);
+    if (opening > 0) openingNotAged += opening;
+    if (!list.length) continue;
+
+    const { buckets, total, unusedCredit } = ageInvoices(
+      list,
+      creditByParty.get(key) || 0,
+      asOf
+    );
+    unappliedCredit += unusedCredit;
+    if (total <= 0) continue;
+
+    rows.push({
+      partyId: p._id,
+      partyName: p.partyName,
+      partyType: p.partyType,
+      mobileNo: p.mobileNo,
+      ...buckets,
+      total,
+    });
+  }
+
+  rows.sort((a, b) => b.total - a.total);
+  const buckets = sumBuckets(rows.map((r) => ({
+    notDue: r.notDue,
+    d0_30: r.d0_30,
+    d31_60: r.d31_60,
+    d61_90: r.d61_90,
+    d90plus: r.d90plus,
+  })));
+  const outstanding = rows.reduce((s, r) => s + r.total, 0);
+
+  return {
+    asOf,
+    buckets: AGING_BUCKETS.map((key) => ({
+      key,
+      label: AGING_BUCKET_LABELS[key],
+      amount: buckets[key],
+    })),
+    totals: {
+      outstanding: Math.round(outstanding * 100) / 100,
+      overdue: Math.round((outstanding - buckets.notDue) * 100) / 100,
+      notDue: buckets.notDue,
+      parties: rows.length,
+    },
+    reconciliation: {
+      openingBalancesNotAged: Math.round(openingNotAged * 100) / 100,
+      unappliedCredit: Math.round(unappliedCredit * 100) / 100,
+    },
+    rows,
   };
 }

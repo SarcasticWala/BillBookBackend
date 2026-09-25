@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "seed": "tsx src/seed.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "tsx src/utils/__tests__/gstin.test.ts && tsx src/utils/__tests__/gstTaxSplit.test.ts && tsx src/utils/__tests__/recurrence.test.ts && tsx src/utils/__tests__/eInvoiceEligibility.test.ts"
+    "test:unit": "tsx src/utils/__tests__/gstin.test.ts && tsx src/utils/__tests__/gstTaxSplit.test.ts && tsx src/utils/__tests__/recurrence.test.ts && tsx src/utils/__tests__/eInvoiceEligibility.test.ts && tsx src/utils/__tests__/partyBalance.test.ts && tsx src/utils/__tests__/receivablesAging.test.ts",
+    "reconcile:balances": "tsx src/scripts/reconcilePartyBalances.ts"
   },
   "dependencies": {
     "@agendajs/mongo-backend": "^4.0.3",
